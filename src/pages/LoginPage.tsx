@@ -15,12 +15,20 @@ export function LoginPage() {
   const [utilisateurId, setUtilisateurId] = useState('')
   const [pin, setPin] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [chargementUtilisateurs, setChargementUtilisateurs] = useState(true)
+  const [erreurUtilisateurs, setErreurUtilisateurs] = useState<string | null>(null)
 
   useEffect(() => {
-    listerUtilisateurs().then((users) => {
-      setUtilisateurs(users)
-      if (users.length > 0) setUtilisateurId(users[0].id)
-    })
+    listerUtilisateurs()
+      .then((users) => {
+        setUtilisateurs(users)
+        if (users.length > 0) setUtilisateurId(users[0].id)
+      })
+      .catch((err) => {
+        console.error('Erreur chargement utilisateurs:', err)
+        setErreurUtilisateurs('Impossible de charger les utilisateurs')
+      })
+      .finally(() => setChargementUtilisateurs(false))
   }, [])
 
   const handleDigit = (digit: string) => {
@@ -61,22 +69,35 @@ export function LoginPage() {
 
         <label className="mt-6 block text-sm font-medium text-gray-700">
           Utilisateur
-          <select
-            value={utilisateurId}
-            onChange={(e) => {
-              setUtilisateurId(e.target.value)
-              setPin('')
-              setError(null)
-            }}
-            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-          >
-            {utilisateurs.length === 0 && <option value="">Chargement...</option>}
-            {utilisateurs.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nom} — {u.role}
-              </option>
-            ))}
-          </select>
+          {chargementUtilisateurs ? (
+            <div className="mt-1 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-400">
+              Chargement...
+            </div>
+          ) : erreurUtilisateurs ? (
+            <div className="mt-1 rounded-xl border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-600">
+              {erreurUtilisateurs}
+            </div>
+          ) : utilisateurs.length === 0 ? (
+            <div className="mt-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-600">
+              Aucun utilisateur trouvé — vérifiez la connexion Supabase
+            </div>
+          ) : (
+            <select
+              value={utilisateurId}
+              onChange={(e) => {
+                setUtilisateurId(e.target.value)
+                setPin('')
+                setError(null)
+              }}
+              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+            >
+              {utilisateurs.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nom} — {u.role}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
 
         <div className="mt-4">

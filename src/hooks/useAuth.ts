@@ -18,8 +18,8 @@ export async function listerUtilisateurs(): Promise<Utilisateur[]> {
     .eq('actif', true)
     .order('nom')
 
-  if (error || !data) return []
-  return data as unknown as Utilisateur[]
+  if (error) throw error
+  return (data ?? []) as unknown as Utilisateur[]
 }
 
 export function useAuth() {
