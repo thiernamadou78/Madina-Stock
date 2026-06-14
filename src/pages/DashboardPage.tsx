@@ -10,7 +10,6 @@ import type { BonReception, BonSortie, StockProduit } from '../types'
 const BON_SORTIE_SELECT = `
   *,
   lignes:lignes_bon_sortie(*, produit:produits(*)),
-  gestionnaire:utilisateurs!bons_sortie_gestionnaire_id_fkey(*),
   depot:depots!bons_sortie_depot_id_fkey(*),
   depot_destination:depots!bons_sortie_depot_destination_id_fkey(*)
 `
@@ -18,8 +17,7 @@ const BON_SORTIE_SELECT = `
 const BON_RECEPTION_SELECT = `
   *,
   lignes:lignes_reception(*, produit:produits(*)),
-  depot:depots(*),
-  saisisseur:utilisateurs!bons_reception_saisi_par_fkey(*)
+  depot:depots(*)
 `
 
 type Tab = 'general' | 'bons' | 'alertes' | 'stocks'

@@ -6,7 +6,6 @@ import type { BonSortie, MotifSortie, StatutBon, Utilisateur } from '../types'
 const BON_SORTIE_SELECT = `
   *,
   lignes:lignes_bon_sortie(*, produit:produits(*)),
-  gestionnaire:utilisateurs!bons_sortie_gestionnaire_id_fkey(*),
   depot:depots!bons_sortie_depot_id_fkey(*),
   depot_destination:depots!bons_sortie_depot_destination_id_fkey(*)
 `
@@ -21,6 +20,22 @@ export async function fetchAdmins(roles: string[]): Promise<Utilisateur[]> {
   return (data ?? []) as unknown as Utilisateur[]
 }
 
+/**
+ * Récupère des utilisateurs par id via une requête directe (non imbriquée),
+ * pour éviter les 401 RLS sur les jointures `utilisateurs` depuis bons_sortie/bons_reception.
+ */
+export async function fetchUtilisateursByIds(ids: Array<string | null | undefined>): Promise<Map<string, Utilisateur>> {
+  const uniqueIds = [...new Set(ids.filter((id): id is string => !!id))]
+  if (uniqueIds.length === 0) return new Map()
+
+  const { data } = await supabase
+    .from('utilisateurs')
+    .select('id, nom, role, contact_wa, actif')
+    .in('id', uniqueIds)
+
+  return new Map(((data ?? []) as unknown as Utilisateur[]).map((u) => [u.id, u]))
+}
+
 async function fetchBonSortie(bonId: string): Promise<BonSortie | null> {
   const { data } = await supabase
     .from('bons_sortie')
@@ -28,7 +43,12 @@ async function fetchBonSortie(bonId: string): Promise<BonSortie | null> {
     .eq('id', bonId)
     .single()
 
-  return (data as unknown as BonSortie) ?? null
+  if (!data) return null
+
+  const bon = data as unknown as BonSortie
+  const utilisateurs = await fetchUtilisateursByIds([bon.gestionnaire_id])
+
+  return { ...bon, gestionnaire: utilisateurs.get(bon.gestionnaire_id) }
 }
 
 /**
@@ -165,7 +185,7 @@ export async function approuverBon(
   }
 
   await notifier({
-    destinataires: [bon.gestionnaire],
+    destinataires: bon.gestionnaire ? [bon.gestionnaire] : [],
     titre: '✅ Bon approuvé',
     message: MESSAGES.bonApprouve(bon),
   })
@@ -202,7 +222,7 @@ export async function rejeterBon(
   }
 
   await notifier({
-    destinataires: [bon.gestionnaire],
+    destinataires: bon.gestionnaire ? [bon.gestionnaire] : [],
     titre: '❌ Bon rejeté',
     message: MESSAGES.bonRejete(bon),
   })

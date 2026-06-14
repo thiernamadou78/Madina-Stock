@@ -1,17 +1,34 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
 import { notifier, MESSAGES } from '../lib/notifications'
-import { fetchAdmins } from '../lib/bons'
+import { fetchAdmins, fetchUtilisateursByIds } from '../lib/bons'
 import { verifierSeuils } from '../lib/alertes'
 import type { BonReception, CanalAppro } from '../types'
 
 const RECEPTION_SELECT = `
-  *,
-  lignes:lignes_reception(*, produit:produits(*)),
-  depot:depots(*),
-  saisisseur:utilisateurs!bons_reception_saisi_par_fkey(*),
-  validateur:utilisateurs!bons_reception_valide_par_fkey(*)
+  id,
+  numero,
+  saisi_par,
+  depot_id,
+  fournisseur,
+  canal,
+  reference_doc,
+  statut,
+  valide_par,
+  valide_le,
+  valeur_totale,
+  created_at,
+  updated_at,
+  depot:depots(id, nom, type),
+  lignes:lignes_reception(
+    id,
+    produit_id,
+    qte_recue,
+    prix_achat_unitaire,
+    valide,
+    produit:produits(id, nom, unite, categorie)
+  )
 `
 
 interface NouvelleLigneReceptionInput {
@@ -43,6 +60,7 @@ export function useReceptions() {
   const [receptions, setReceptions] = useState<BonReception[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const channelIdRef = useRef(Math.random().toString(36).slice(2))
 
   const refresh = useCallback(async () => {
     if (!depotActifId) {
@@ -60,11 +78,16 @@ export function useReceptions() {
       .order('created_at', { ascending: false })
 
     if (err) {
+      console.error('bons_reception fetch error:', err)
       setError(err.message)
-    } else {
-      setReceptions((data ?? []) as unknown as BonReception[])
+      setLoading(false)
+      return
     }
 
+    const recus = (data ?? []) as unknown as BonReception[]
+    const utilisateurs = await fetchUtilisateursByIds(recus.map((r) => r.saisi_par))
+
+    setReceptions(recus.map((r) => ({ ...r, saisisseur: utilisateurs.get(r.saisi_par) })))
     setLoading(false)
   }, [depotActifId])
 
@@ -76,7 +99,7 @@ export function useReceptions() {
     if (!depotActifId) return
 
     const channel = supabase
-      .channel(`bons_reception:${depotActifId}`)
+      .channel(`bons_reception:${depotActifId}:${channelIdRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bons_reception', filter: `depot_id=eq.${depotActifId}` },
@@ -202,11 +225,13 @@ export function useReceptions() {
     if (rpcErr) return { error: rpcErr.message }
     if (!result?.success) return { error: result?.error ?? 'Erreur lors de la validation' }
 
-    await notifier({
-      destinataires: [reception.saisisseur],
-      titre: '✅ Réception validée',
-      message: MESSAGES.receptionValidee(reception),
-    })
+    if (reception.saisisseur) {
+      await notifier({
+        destinataires: [reception.saisisseur],
+        titre: '✅ Réception validée',
+        message: MESSAGES.receptionValidee(reception),
+      })
+    }
 
     await verifierSeuils(reception.depot_id, reception.lignes.map((l) => l.produit_id))
 

@@ -62,7 +62,7 @@ export interface BonSortie {
   id: string
   numero: string
   gestionnaire_id: string
-  gestionnaire: Utilisateur
+  gestionnaire?: Utilisateur
   depot_id: string
   depot: Depot
   motif: MotifSortie
@@ -91,7 +91,7 @@ export interface BonReception {
   id: string
   numero: string
   saisi_par: string
-  saisisseur: Utilisateur
+  saisisseur?: Utilisateur
   depot_id: string
   depot: Depot
   fournisseur: string

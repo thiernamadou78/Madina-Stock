@@ -14,7 +14,7 @@ const AFRICAS_TALKING_USERNAME = import.meta.env.VITE_AFRICAS_TALKING_USERNAME ?
  */
 export const MESSAGES = {
   bonSoumis: (bon: BonSortie) =>
-    `📦 Nouveau bon ${bon.numero} — ${bon.motif} — ${bon.depot.nom} — par ${bon.gestionnaire.nom}`,
+    `📦 Nouveau bon ${bon.numero} — ${bon.motif} — ${bon.depot.nom} — par ${bon.gestionnaire?.nom ?? '-'}`,
   bonApprouve: (bon: BonSortie) => `✅ Votre bon ${bon.numero} a été approuvé`,
   bonRejete: (bon: BonSortie) => `❌ Votre bon ${bon.numero} a été rejeté`,
   alerteSeuil: (sp: StockProduit) =>

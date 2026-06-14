@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
 import type { StockProduit } from '../types'
@@ -28,6 +28,7 @@ export function useStock() {
   const [stock, setStock] = useState<StockProduit[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const channelIdRef = useRef(Math.random().toString(36).slice(2))
 
   const refresh = useCallback(async () => {
     if (!depotActifId) {
@@ -61,7 +62,7 @@ export function useStock() {
     if (!depotActifId) return
 
     const channel = supabase
-      .channel(`stock_produits:${depotActifId}`)
+      .channel(`stock_produits:${depotActifId}:${channelIdRef.current}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'stock_produits', filter: `depot_id=eq.${depotActifId}` },
