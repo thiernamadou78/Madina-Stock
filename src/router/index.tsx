@@ -1,9 +1,13 @@
+import { useEffect, useState } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAppStore } from '../stores/appStore'
+import { supabase } from '../lib/supabase'
 import { TopBar } from '../components/layout/TopBar'
 import { BottomNav } from '../components/ui/BottomNav'
 import { LoginPage } from '../pages/LoginPage'
+import { OnboardingPage } from '../pages/OnboardingPage'
 import { SelectDepotPage } from '../pages/SelectDepotPage'
 import { HomePage } from '../pages/HomePage'
 import { NouvelleSortiePage } from '../pages/NouvellesortiePage'
@@ -43,11 +47,12 @@ function RoleRoute({ roles }: { roles: Role[] }) {
   return <Outlet />
 }
 
-export function AppRouter() {
+function AppRoutes() {
   const { isAuthenticated } = useAuth()
 
   return (
     <Routes>
+      <Route path="/onboarding" element={<Navigate to="/login" replace />} />
       <Route
         path="/login"
         element={isAuthenticated ? <Navigate to="/select-depot" replace /> : <LoginPage />}
@@ -76,4 +81,39 @@ export function AppRouter() {
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
+}
+
+export function AppRouter() {
+  const [utilisateursExistent, setUtilisateursExistent] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('utilisateurs')
+      .select('*', { count: 'exact', head: true })
+      .then(({ count, error }) => {
+        setUtilisateursExistent(error ? true : (count ?? 0) > 0)
+      })
+  }, [])
+
+  if (utilisateursExistent === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-brand-800">
+        <Loader2 size={32} className="animate-spin text-white" />
+      </div>
+    )
+  }
+
+  if (!utilisateursExistent) {
+    return (
+      <Routes>
+        <Route
+          path="/onboarding"
+          element={<OnboardingPage onComplete={() => setUtilisateursExistent(true)} />}
+        />
+        <Route path="*" element={<Navigate to="/onboarding" replace />} />
+      </Routes>
+    )
+  }
+
+  return <AppRoutes />
 }

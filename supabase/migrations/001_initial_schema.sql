@@ -191,21 +191,13 @@ ALTER TABLE sessions_gestionnaire ENABLE ROW LEVEL SECURITY;
 -- ------------------------------------------------------------
 -- Données de seed pour les tests
 -- ------------------------------------------------------------
-
--- Données test : 1 propriétaire, 2 gestionnaires, 3 dépôts, 4 produits
-INSERT INTO depots (nom, type, localisation) VALUES
-  ('Magasin principal', 'principal', 'Conakry centre'),
-  ('Dépôt Madina', 'secondaire', 'Madina'),
-  ('Dépôt Ratoma', 'secondaire', 'Ratoma');
+-- Les comptes utilisateurs, dépôts et liaisons utilisateurs_depots ne sont
+-- plus seedés ici : le premier propriétaire et son premier dépôt sont créés
+-- via l'écran d'onboarding (voir 007_onboarding.sql et OnboardingPage.tsx),
+-- affiché tant que la table utilisateurs est vide.
 
 INSERT INTO produits (nom, categorie, unite) VALUES
   ('Riz importé 50kg', 'Céréales', 'sac'),
   ('Huile végétale 20L', 'Huiles', 'bidon'),
   ('Sucre 25kg', 'Sucre', 'sac'),
   ('Farine de blé 50kg', 'Céréales', 'sac');
-
--- Codes PIN : "1234" hashé bcrypt (à remplacer en production)
-INSERT INTO utilisateurs (nom, code_pin, role, contact_wa) VALUES
-  ('Ibrahima Diallo', '$2b$10$...', 'proprietaire', '+224620000001'),
-  ('Mamadou Baldé', '$2b$10$...', 'gestionnaire', '+224620000002'),
-  ('Aliou Souaré', '$2b$10$...', 'gestionnaire', '+224620000003');
