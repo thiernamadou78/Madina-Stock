@@ -21,7 +21,7 @@ import type { Role } from '../types'
 
 function AppLayout() {
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-[100dvh] bg-gray-50">
       <TopBar />
       <main className="px-4 py-4 pb-24">
         <Outlet />
@@ -102,7 +102,7 @@ export function AppRouter() {
 
   if (utilisateursExistent === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-brand-800">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-brand-800">
         <Loader2 size={32} className="animate-spin text-white" />
       </div>
     )

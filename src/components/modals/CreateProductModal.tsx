@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAppStore } from '../../stores/appStore'
+import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import type { Produit } from '../../types'
 
@@ -16,6 +16,9 @@ const CATEGORIES = ['Céréales', 'Huiles', 'Sucre', 'Boissons', 'Hygiène', 'Co
 const UNITES = ['sac', 'bidon', 'carton', 'pièce', 'kg', 'litre', 'boîte', 'sachet']
 
 const AUTRE = '__autre__'
+
+const INPUT_CLASS =
+  'mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-base focus:border-brand-400 focus:outline-none'
 
 export function CreateProductModal({ open, onClose, onCreated, initialNom = '' }: CreateProductModalProps) {
   const depotActifId = useAppStore((s) => s.depotActifId)
@@ -34,8 +37,6 @@ export function CreateProductModal({ open, onClose, onCreated, initialNom = '' }
   useEffect(() => {
     if (open) setNom(initialNom)
   }, [open, initialNom])
-
-  if (!open) return null
 
   const reset = () => {
     setNom('')
@@ -95,113 +96,96 @@ export function CreateProductModal({ open, onClose, onCreated, initialNom = '' }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Nouveau produit</h2>
-          <button type="button" aria-label="Fermer" onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={20} />
-          </button>
+    <Modal isOpen={open} onClose={onClose} title="Nouveau produit">
+      <div className="flex flex-col gap-3 pb-4">
+        <label className="text-sm font-medium text-gray-700">
+          Nom
+          <input
+            value={nom}
+            onChange={(e) => setNom(e.target.value)}
+            className={INPUT_CLASS}
+            placeholder="Riz importé 50kg"
+          />
+        </label>
+
+        <label className="text-sm font-medium text-gray-700">
+          Référence
+          <input
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            className={INPUT_CLASS}
+            placeholder="Optionnel"
+          />
+        </label>
+
+        <label className="text-sm font-medium text-gray-700">
+          Catégorie
+          <select value={categorie} onChange={(e) => setCategorie(e.target.value)} className={INPUT_CLASS}>
+            <option value="">Sélectionner...</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            <option value={AUTRE}>Autre...</option>
+          </select>
+        </label>
+
+        {categorie === AUTRE && (
+          <input
+            value={categorieAutre}
+            onChange={(e) => setCategorieAutre(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2 text-base focus:border-brand-400 focus:outline-none"
+            placeholder="Nom de la catégorie"
+          />
+        )}
+
+        <label className="text-sm font-medium text-gray-700">
+          Unité
+          <select value={unite} onChange={(e) => setUnite(e.target.value)} className={INPUT_CLASS}>
+            <option value="">Sélectionner...</option>
+            {UNITES.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+            <option value={AUTRE}>Autre...</option>
+          </select>
+        </label>
+
+        {unite === AUTRE && (
+          <input
+            value={uniteAutre}
+            onChange={(e) => setUniteAutre(e.target.value)}
+            className="rounded-xl border border-gray-200 px-3 py-2 text-base focus:border-brand-400 focus:outline-none"
+            placeholder="Nom de l'unité"
+          />
+        )}
+
+        <div className="flex gap-3">
+          <label className="flex-1 text-sm font-medium text-gray-700">
+            Seuil alerte
+            <input
+              type="number"
+              value={seuilAlerte}
+              onChange={(e) => setSeuilAlerte(e.target.value)}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="flex-1 text-sm font-medium text-gray-700">
+            Seuil critique
+            <input
+              type="number"
+              value={seuilCritique}
+              onChange={(e) => setSeuilCritique(e.target.value)}
+              className={INPUT_CLASS}
+            />
+          </label>
         </div>
 
-        <div className="mt-4 flex flex-col gap-3">
-          <label className="text-sm font-medium text-gray-700">
-            Nom
-            <input
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              placeholder="Riz importé 50kg"
-            />
-          </label>
+        {error && <p className="text-sm text-danger-600">{error}</p>}
 
-          <label className="text-sm font-medium text-gray-700">
-            Référence
-            <input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              placeholder="Optionnel"
-            />
-          </label>
-
-          <label className="text-sm font-medium text-gray-700">
-            Catégorie
-            <select
-              value={categorie}
-              onChange={(e) => setCategorie(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-            >
-              <option value="">Sélectionner...</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-              <option value={AUTRE}>Autre...</option>
-            </select>
-          </label>
-
-          {categorie === AUTRE && (
-            <input
-              value={categorieAutre}
-              onChange={(e) => setCategorieAutre(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              placeholder="Nom de la catégorie"
-            />
-          )}
-
-          <label className="text-sm font-medium text-gray-700">
-            Unité
-            <select
-              value={unite}
-              onChange={(e) => setUnite(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-            >
-              <option value="">Sélectionner...</option>
-              {UNITES.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-              <option value={AUTRE}>Autre...</option>
-            </select>
-          </label>
-
-          {unite === AUTRE && (
-            <input
-              value={uniteAutre}
-              onChange={(e) => setUniteAutre(e.target.value)}
-              className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              placeholder="Nom de l'unité"
-            />
-          )}
-
-          <div className="flex gap-3">
-            <label className="flex-1 text-sm font-medium text-gray-700">
-              Seuil alerte
-              <input
-                type="number"
-                value={seuilAlerte}
-                onChange={(e) => setSeuilAlerte(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-            <label className="flex-1 text-sm font-medium text-gray-700">
-              Seuil critique
-              <input
-                type="number"
-                value={seuilCritique}
-                onChange={(e) => setSeuilCritique(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-          </div>
-
-          {error && <p className="text-sm text-danger-600">{error}</p>}
-        </div>
-
-        <div className="mt-5 flex gap-3">
+        <div className="flex gap-3">
           <Button variant="ghost" fullWidth onClick={onClose} disabled={loading}>
             Annuler
           </Button>
@@ -210,6 +194,6 @@ export function CreateProductModal({ open, onClose, onCreated, initialNom = '' }
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

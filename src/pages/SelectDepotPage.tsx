@@ -95,7 +95,7 @@ export function SelectDepotPage() {
   const selectedDepot = depots.find((d) => d.id === selectedId)
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-[100dvh] bg-gray-50">
       <header className="flex items-center gap-3 bg-brand-800 px-4 py-4 text-white">
         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-sm font-bold">
           {user?.nom?.slice(0, 2).toUpperCase()}

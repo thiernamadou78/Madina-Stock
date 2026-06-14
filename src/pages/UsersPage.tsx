@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-import { Building2, Check, KeyRound, Pencil, Plus, Power, X } from 'lucide-react'
+import { Building2, Check, KeyRound, Pencil, Plus, Power } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
 import type { Depot, Role } from '../types'
 
 const TEL_REGEX = /^\+224\d{9}$/
+
+const INPUT_CLASS =
+  'mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-base focus:border-brand-400 focus:outline-none'
 
 const AVATAR_COLORS = [
   'bg-brand-100 text-brand-800',
@@ -58,33 +61,6 @@ function avatarColor(id: string): string {
   let hash = 0
   for (const c of id) hash = (hash * 31 + c.charCodeAt(0)) % AVATAR_COLORS.length
   return AVATAR_COLORS[hash]
-}
-
-function BottomSheet({
-  title,
-  onClose,
-  children,
-}: {
-  title: string
-  onClose: () => void
-  children: ReactNode
-}) {
-  return (
-    <div className="fixed inset-0 z-40 flex items-end bg-black/40" onClick={onClose}>
-      <div
-        className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-          <button type="button" onClick={onClose} aria-label="Fermer" className="text-gray-400">
-            <X size={20} />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
 }
 
 export function UsersPage() {
@@ -375,159 +351,159 @@ export function UsersPage() {
         <Plus size={24} />
       </button>
 
-      {sheet === 'gestionnaire' && (
-        <BottomSheet title={editingId ? 'Modifier le gestionnaire' : 'Nouveau gestionnaire'} onClose={closeSheet}>
-          <div className="flex flex-col gap-3">
-            {editingId ? (
+      <Modal
+        isOpen={sheet === 'gestionnaire'}
+        onClose={closeSheet}
+        title={editingId ? 'Modifier le gestionnaire' : 'Nouveau gestionnaire'}
+      >
+        <div className="flex flex-col gap-3 pb-4">
+          {editingId ? (
+            <label className="text-sm font-medium text-gray-700">
+              Nom complet
+              <input
+                type="text"
+                value={`${form.prenom} ${form.nom}`.trim()}
+                onChange={(e) => {
+                  const [prenom, ...reste] = e.target.value.split(/\s+/)
+                  setForm((f) => ({ ...f, prenom: prenom ?? '', nom: reste.join(' ') }))
+                }}
+                className={INPUT_CLASS}
+              />
+            </label>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
               <label className="text-sm font-medium text-gray-700">
-                Nom complet
+                Prénom
                 <input
                   type="text"
-                  value={`${form.prenom} ${form.nom}`.trim()}
-                  onChange={(e) => {
-                    const [prenom, ...reste] = e.target.value.split(/\s+/)
-                    setForm((f) => ({ ...f, prenom: prenom ?? '', nom: reste.join(' ') }))
-                  }}
-                  className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                  value={form.prenom}
+                  onChange={(e) => setForm((f) => ({ ...f, prenom: e.target.value }))}
+                  className={INPUT_CLASS}
                 />
               </label>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <label className="text-sm font-medium text-gray-700">
-                  Prénom
-                  <input
-                    type="text"
-                    value={form.prenom}
-                    onChange={(e) => setForm((f) => ({ ...f, prenom: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-                  />
-                </label>
-                <label className="text-sm font-medium text-gray-700">
-                  Nom
-                  <input
-                    type="text"
-                    value={form.nom}
-                    onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
-                    className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-                  />
-                </label>
-              </div>
-            )}
-
-            <label className="text-sm font-medium text-gray-700">
-              Téléphone
-              <input
-                type="tel"
-                value={form.tel}
-                onChange={(e) => setForm((f) => ({ ...f, tel: e.target.value }))}
-                placeholder="+224620000001"
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
-
-            <label className="text-sm font-medium text-gray-700">
-              Rôle
-              <select
-                value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as GestionnaireForm['role'] }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              >
-                <option value="gestionnaire">Gestionnaire</option>
-                <option value="responsable">Responsable</option>
-              </select>
-            </label>
-
-            <div>
-              <span className="block text-sm font-medium text-gray-700">Stocks assignés</span>
-
-              <button
-                type="button"
-                onClick={() => setForm((f) => ({ ...f, allDepots: !f.allDepots }))}
-                className={`mt-2 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium ${
-                  form.allDepots ? 'border-brand-400 bg-brand-50 text-brand-800' : 'border-gray-200 text-gray-700'
-                }`}
-              >
-                Tous les stocks
-                {form.allDepots && <Check size={16} />}
-              </button>
-
-              {!form.allDepots && (
-                <div className="mt-2 flex flex-col gap-1.5">
-                  {depots.map((d) => (
-                    <label key={d.id} className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={form.depotIds.includes(d.id)}
-                        onChange={() => toggleDepotForm(d.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-brand-800 focus:ring-brand-400"
-                      />
-                      {d.nom}
-                    </label>
-                  ))}
-                </div>
-              )}
+              <label className="text-sm font-medium text-gray-700">
+                Nom
+                <input
+                  type="text"
+                  value={form.nom}
+                  onChange={(e) => setForm((f) => ({ ...f, nom: e.target.value }))}
+                  className={INPUT_CLASS}
+                />
+              </label>
             </div>
+          )}
 
-            {!editingId && (
-              <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                PIN par défaut : <span className="font-semibold text-gray-700">1234</span> (changement
-                obligatoire à la première connexion)
+          <label className="text-sm font-medium text-gray-700">
+            Téléphone
+            <input
+              type="tel"
+              value={form.tel}
+              onChange={(e) => setForm((f) => ({ ...f, tel: e.target.value }))}
+              placeholder="+224620000001"
+              className={INPUT_CLASS}
+            />
+          </label>
+
+          <label className="text-sm font-medium text-gray-700">
+            Rôle
+            <select
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as GestionnaireForm['role'] }))}
+              className={INPUT_CLASS}
+            >
+              <option value="gestionnaire">Gestionnaire</option>
+              <option value="responsable">Responsable</option>
+            </select>
+          </label>
+
+          <div>
+            <span className="block text-sm font-medium text-gray-700">Stocks assignés</span>
+
+            <button
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, allDepots: !f.allDepots }))}
+              className={`mt-2 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium ${
+                form.allDepots ? 'border-brand-400 bg-brand-50 text-brand-800' : 'border-gray-200 text-gray-700'
+              }`}
+            >
+              Tous les stocks
+              {form.allDepots && <Check size={16} />}
+            </button>
+
+            {!form.allDepots && (
+              <div className="mt-2 flex flex-col gap-1.5">
+                {depots.map((d) => (
+                  <label key={d.id} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.depotIds.includes(d.id)}
+                      onChange={() => toggleDepotForm(d.id)}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-800 focus:ring-brand-400"
+                    />
+                    {d.nom}
+                  </label>
+                ))}
               </div>
             )}
-
-            {formError && <p className="text-sm text-danger-600">{formError}</p>}
-
-            <Button fullWidth onClick={handleSaveGestionnaire} disabled={saving}>
-              {saving ? 'Enregistrement...' : editingId ? 'Enregistrer' : 'Créer le gestionnaire'}
-            </Button>
           </div>
-        </BottomSheet>
-      )}
 
-      {sheet === 'depot' && (
-        <BottomSheet title="Nouveau dépôt" onClose={() => setSheet(null)}>
-          <div className="flex flex-col gap-3">
-            <label className="text-sm font-medium text-gray-700">
-              Nom du dépôt
-              <input
-                type="text"
-                value={depotForm.nom}
-                onChange={(e) => setDepotForm((f) => ({ ...f, nom: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
+          {!editingId && (
+            <div className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              PIN par défaut : <span className="font-semibold text-gray-700">1234</span> (changement
+              obligatoire à la première connexion)
+            </div>
+          )}
 
-            <label className="text-sm font-medium text-gray-700">
-              Type
-              <select
-                value={depotForm.type}
-                onChange={(e) => setDepotForm((f) => ({ ...f, type: e.target.value as Depot['type'] }))}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              >
-                <option value="principal">Principal</option>
-                <option value="secondaire">Secondaire</option>
-              </select>
-            </label>
+          {formError && <p className="text-sm text-danger-600">{formError}</p>}
 
-            <label className="text-sm font-medium text-gray-700">
-              Localisation (optionnel)
-              <input
-                type="text"
-                value={depotForm.localisation}
-                onChange={(e) => setDepotForm((f) => ({ ...f, localisation: e.target.value }))}
-                placeholder="Conakry centre"
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              />
-            </label>
+          <Button fullWidth onClick={handleSaveGestionnaire} disabled={saving}>
+            {saving ? 'Enregistrement...' : editingId ? 'Enregistrer' : 'Créer le gestionnaire'}
+          </Button>
+        </div>
+      </Modal>
 
-            {depotFormError && <p className="text-sm text-danger-600">{depotFormError}</p>}
+      <Modal isOpen={sheet === 'depot'} onClose={() => setSheet(null)} title="Nouveau dépôt">
+        <div className="flex flex-col gap-3 pb-4">
+          <label className="text-sm font-medium text-gray-700">
+            Nom du dépôt
+            <input
+              type="text"
+              value={depotForm.nom}
+              onChange={(e) => setDepotForm((f) => ({ ...f, nom: e.target.value }))}
+              className={INPUT_CLASS}
+            />
+          </label>
 
-            <Button fullWidth onClick={handleSaveDepot} disabled={saving}>
-              {saving ? 'Création...' : 'Créer le dépôt'}
-            </Button>
-          </div>
-        </BottomSheet>
-      )}
+          <label className="text-sm font-medium text-gray-700">
+            Type
+            <select
+              value={depotForm.type}
+              onChange={(e) => setDepotForm((f) => ({ ...f, type: e.target.value as Depot['type'] }))}
+              className={INPUT_CLASS}
+            >
+              <option value="principal">Principal</option>
+              <option value="secondaire">Secondaire</option>
+            </select>
+          </label>
+
+          <label className="text-sm font-medium text-gray-700">
+            Localisation (optionnel)
+            <input
+              type="text"
+              value={depotForm.localisation}
+              onChange={(e) => setDepotForm((f) => ({ ...f, localisation: e.target.value }))}
+              placeholder="Conakry centre"
+              className={INPUT_CLASS}
+            />
+          </label>
+
+          {depotFormError && <p className="text-sm text-danger-600">{depotFormError}</p>}
+
+          <Button fullWidth onClick={handleSaveDepot} disabled={saving}>
+            {saving ? 'Création...' : 'Créer le dépôt'}
+          </Button>
+        </div>
+      </Modal>
     </div>
   )
 }

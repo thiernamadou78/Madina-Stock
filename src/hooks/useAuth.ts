@@ -58,7 +58,6 @@ export function useAuth() {
   const reset = useAppStore((s) => s.reset)
 
   const [loading, setLoading] = useState(false)
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [attempts, setAttempts] = useState(0)
 
   const finalizeLogin = useCallback(async (row: {
@@ -140,28 +139,24 @@ export function useAuth() {
 
     setDepotActif(depotId)
 
-    const { data } = await supabase
+    await supabase
       .from('sessions_gestionnaire')
       .insert({ user_id: user.id, depot_id: depotId })
-      .select('id')
-      .single()
-
-    if (data) setSessionId(data.id)
   }, [user, setDepotActif])
 
   /**
    * Ferme la session de gestionnaire en cours et déconnecte l'utilisateur.
    */
   const logout = useCallback(async () => {
-    if (sessionId) {
+    if (user) {
       await supabase
         .from('sessions_gestionnaire')
         .update({ ferme_le: new Date().toISOString() })
-        .eq('id', sessionId)
+        .eq('user_id', user.id)
+        .is('ferme_le', null)
     }
-    setSessionId(null)
     reset()
-  }, [sessionId, reset])
+  }, [user, reset])
 
   return {
     user,

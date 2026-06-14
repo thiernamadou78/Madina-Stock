@@ -127,7 +127,7 @@ export function OnboardingPage({ onComplete }: OnboardingPageProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-brand-800 px-6">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-brand-800 px-6">
       <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
         <div className="flex flex-col items-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-800 text-xl font-bold text-white">
