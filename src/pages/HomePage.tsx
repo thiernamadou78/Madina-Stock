@@ -1,0 +1,140 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  ArrowLeftRight,
+  History,
+  PackageMinus,
+  PackagePlus,
+  Wifi,
+  WifiOff,
+} from 'lucide-react'
+import { supabase } from '../lib/supabase'
+import { useAppStore } from '../stores/appStore'
+import { useStock } from '../hooks/useStock'
+import { useExpiration } from '../hooks/useExpiration'
+import { AlertStrip } from '../components/ui/AlertStrip'
+import { Button } from '../components/ui/Button'
+
+const DOT_COLORS: Record<string, string> = {
+  ok: 'bg-brand-400',
+  alerte: 'bg-amber-400',
+  critique: 'bg-danger-400',
+  rupture: 'bg-danger-600',
+}
+
+export function HomePage() {
+  const depotActifId = useAppStore((s) => s.depotActifId)
+  const { stock, alertes, loading, refresh: refreshStock } = useStock()
+  const [bonsJour, setBonsJour] = useState(0)
+  const [online, setOnline] = useState(navigator.onLine)
+
+  useExpiration(refreshStock)
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true)
+    const onOffline = () => setOnline(false)
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
+    return () => {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!depotActifId) return
+
+    const debut = new Date()
+    debut.setHours(0, 0, 0, 0)
+
+    Promise.all([
+      supabase
+        .from('bons_sortie')
+        .select('id', { count: 'exact', head: true })
+        .eq('depot_id', depotActifId)
+        .gte('created_at', debut.toISOString()),
+      supabase
+        .from('bons_reception')
+        .select('id', { count: 'exact', head: true })
+        .eq('depot_id', depotActifId)
+        .gte('created_at', debut.toISOString()),
+    ]).then(([sortieRes, receptionRes]) => {
+      setBonsJour((sortieRes.count ?? 0) + (receptionRes.count ?? 0))
+    })
+  }, [depotActifId])
+
+  const kpis = [
+    { label: 'Articles', value: stock.length, color: 'bg-brand-50 text-brand-800' },
+    { label: 'Bons du jour', value: bonsJour, color: 'bg-blue-50 text-blue-800' },
+    { label: 'Alertes', value: alertes.length, color: 'bg-amber-50 text-amber-600' },
+  ]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <AlertStrip alertes={alertes} />
+
+      <div className="grid grid-cols-2 gap-3">
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className={`rounded-2xl p-4 ${kpi.color}`}>
+            <div className="text-2xl font-bold">{kpi.value}</div>
+            <div className="text-xs font-medium">{kpi.label}</div>
+          </div>
+        ))}
+
+        <div className={`flex flex-col rounded-2xl p-4 ${online ? 'bg-brand-50 text-brand-800' : 'bg-danger-50 text-danger-600'}`}>
+          <div className="flex items-center gap-2">
+            {online ? <Wifi size={20} /> : <WifiOff size={20} />}
+          </div>
+          <div className="mt-1 text-xs font-medium">{online ? 'Connecté' : 'Hors ligne'}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Link to="/sortie">
+          <Button fullWidth icon={<PackageMinus size={18} />}>
+            Nouvelle sortie
+          </Button>
+        </Link>
+        <Link to="/reception">
+          <Button fullWidth variant="secondary" icon={<PackagePlus size={18} />}>
+            Réception
+          </Button>
+        </Link>
+        <Link to="/historique">
+          <Button fullWidth variant="secondary" icon={<History size={18} />}>
+            Historique
+          </Button>
+        </Link>
+        <Link to="/select-depot">
+          <Button fullWidth variant="ghost" icon={<ArrowLeftRight size={18} />}>
+            Changer stock
+          </Button>
+        </Link>
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold text-gray-700">Stock du dépôt</h2>
+
+        {loading && <p className="text-sm text-gray-400">Chargement...</p>}
+
+        <div className="flex flex-col gap-2">
+          {stock.map((s) => (
+            <div key={s.id} className="flex items-center justify-between gap-2 py-1">
+              <div className="flex items-center gap-2">
+                <span className={`h-2.5 w-2.5 rounded-full ${DOT_COLORS[s.statut_stock]}`} />
+                <span className="text-sm text-gray-700">{s.produit?.nom}</span>
+              </div>
+              <span className="text-sm font-medium text-gray-500">
+                {s.qte_disponible} {s.produit?.unite}
+              </span>
+            </div>
+          ))}
+
+          {!loading && stock.length === 0 && (
+            <p className="text-sm text-gray-400">Aucun produit en stock</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
