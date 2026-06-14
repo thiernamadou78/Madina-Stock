@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { useReceptions } from '../hooks/useReceptions'
 import { useAppStore } from '../stores/appStore'
 import { Button } from '../components/ui/Button'
+import { CATEGORIES_PRODUIT, UNITES_PRODUIT } from '../lib/produits'
 import type { CanalAppro, Produit } from '../types'
 
 const CANAUX: { value: CanalAppro; label: string; icon: string }[] = [
@@ -13,18 +14,6 @@ const CANAUX: { value: CanalAppro; label: string; icon: string }[] = [
   { value: 'app_mobile', label: 'App mobile', icon: '📱' },
   { value: 'conteneur', label: 'Conteneur', icon: '🚢' },
 ]
-
-const CATEGORIES_PRODUIT = [
-  'Céréales',
-  'Huiles & graisses',
-  'Sucre & confiserie',
-  'Boissons',
-  'Conserves',
-  'Produits laitiers',
-  'Autres',
-]
-
-const UNITES_PRODUIT = ['Sac', 'Bidon', 'Carton', 'Bouteille', 'Boîte', 'Pièce', 'Kg', 'Litre']
 
 const STEPS = ['Fournisseur', 'Articles', 'Résumé']
 

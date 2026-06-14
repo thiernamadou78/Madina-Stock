@@ -1,15 +1,8 @@
-import { useState } from 'react'
-import { Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useStock } from '../hooks/useStock'
-import { useAppStore } from '../stores/appStore'
-import { Button } from '../components/ui/Button'
-import { CreateProductModal } from '../components/modals/CreateProductModal'
 
 export function SettingsPage() {
   const { stock, refresh } = useStock()
-  const depots = useAppStore((s) => s.depots)
-  const [modalOpen, setModalOpen] = useState(false)
 
   const updateSeuil = async (
     stockId: string,
@@ -25,12 +18,12 @@ export function SettingsPage() {
       <h1 className="text-lg font-bold text-gray-900">Paramètres</h1>
 
       <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">Seuils de stock</h2>
-          <Button size="sm" icon={<Plus size={16} />} onClick={() => setModalOpen(true)}>
-            Produit
-          </Button>
-        </div>
+        <h2 className="mb-1 text-sm font-semibold text-gray-700">MadinaStock</h2>
+        <p className="text-xs text-gray-400">Version 1.0.0</p>
+      </div>
+
+      <div className="rounded-2xl bg-white p-4 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold text-gray-700">Seuils de stock par défaut</h2>
 
         <div className="flex flex-col gap-3">
           {stock.map((s) => (
@@ -59,21 +52,6 @@ export function SettingsPage() {
           {stock.length === 0 && <p className="text-sm text-gray-400">Aucun produit</p>}
         </div>
       </div>
-
-      <div className="rounded-2xl bg-white p-4 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-gray-700">Dépôts</h2>
-        <div className="flex flex-col gap-2">
-          {depots.map((depot) => (
-            <div key={depot.id} className="flex items-center justify-between text-sm">
-              <span className="text-gray-700">{depot.nom}</span>
-              <span className="text-xs text-gray-400">{depot.type}</span>
-            </div>
-          ))}
-          {depots.length === 0 && <p className="text-sm text-gray-400">Aucun dépôt</p>}
-        </div>
-      </div>
-
-      <CreateProductModal open={modalOpen} onClose={() => setModalOpen(false)} onCreated={refresh} />
     </div>
   )
 }

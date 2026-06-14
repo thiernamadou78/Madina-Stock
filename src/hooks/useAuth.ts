@@ -32,16 +32,37 @@ async function fetchAllDepotsFlag(userId: string): Promise<boolean> {
   return (data as { all_depots?: boolean } | null)?.all_depots ?? false
 }
 
-async function fetchDepotsForUser(userId: string, allDepots: boolean): Promise<Depot[]> {
-  if (allDepots) {
-    const { data } = await supabase.from('depots').select('*').eq('actif', true)
+/**
+ * Charge la liste des dépôts accessibles à un utilisateur selon son rôle.
+ * Le/la propriétaire et l'admin voient toujours TOUS les dépôts actifs,
+ * quelles que soient les assignations dans utilisateurs_depots.
+ */
+async function chargerDepots(user: Utilisateur): Promise<Depot[]> {
+  // Proprietaire et admin voient toujours tous les dépôts
+  if (user.role === 'proprietaire' || user.role === 'admin') {
+    const { data } = await supabase
+      .from('depots')
+      .select('*')
+      .eq('actif', true)
+      .order('nom')
     return (data ?? []) as unknown as Depot[]
   }
 
+  // Gestionnaire avec le flag all_depots voit tous les dépôts
+  if (user.all_depots) {
+    const { data } = await supabase
+      .from('depots')
+      .select('*')
+      .eq('actif', true)
+      .order('nom')
+    return (data ?? []) as unknown as Depot[]
+  }
+
+  // Les autres utilisateurs ne voient que les dépôts assignés
   const { data } = await supabase
     .from('utilisateurs_depots')
-    .select('depot:depots(*)')
-    .eq('utilisateur_id', userId)
+    .select('depot:depots(id, nom, type, localisation, actif)')
+    .eq('utilisateur_id', user.id)
 
   return (data ?? [])
     .map((row) => row.depot as unknown as Depot)
@@ -79,7 +100,7 @@ export function useAuth() {
     setAttempts(0)
     setUser(utilisateur)
 
-    const depotsUtilisateur = await fetchDepotsForUser(utilisateur.id, allDepots)
+    const depotsUtilisateur = await chargerDepots(utilisateur)
     setDepots(depotsUtilisateur)
 
     return { user: utilisateur, error: null }

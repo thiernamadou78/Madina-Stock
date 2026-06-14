@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { Home, PackageMinus, PackagePlus, History, Settings, ClipboardCheck, LayoutDashboard } from 'lucide-react'
+import { Home, PackageMinus, PackagePlus, History, Package, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useAppStore } from '../../stores/appStore'
 import { useBons } from '../../hooks/useBons'
@@ -17,28 +17,33 @@ const BASE_ITEMS: NavItem[] = [
   { to: '/', label: 'Accueil', icon: Home, end: true },
   { to: '/sortie', label: 'Sortie', icon: PackageMinus, end: false },
   { to: '/reception', label: 'Réception', icon: PackagePlus, end: false },
+  { to: '/produits', label: 'Produits', icon: Package, end: false },
   { to: '/historique', label: 'Historique', icon: History, end: false },
 ]
-
-const SETTINGS_ITEM: NavItem = { to: '/parametres', label: 'Réglages', icon: Settings, end: false }
 
 export function BottomNav() {
   const role = useAppStore((s) => s.user?.role)
   const { enAttente: enAttenteSortie } = useBons()
   const { enAttente: enAttenteReception } = useReceptions()
 
-  const canValider = role === 'responsable' || role === 'proprietaire'
-  const canDashboard = role === 'admin' || role === 'proprietaire'
   const totalEnAttente = enAttenteSortie + enAttenteReception
 
-  const items: NavItem[] = [
-    ...BASE_ITEMS,
-    ...(canValider
-      ? [{ to: '/validations', label: 'Validations', icon: ClipboardCheck, end: false, badge: totalEnAttente }]
-      : []),
-    ...(canDashboard ? [{ to: '/dashboard', label: 'Stats', icon: LayoutDashboard, end: false }] : []),
-    SETTINGS_ITEM,
-  ]
+  const items: NavItem[] =
+    role === 'proprietaire'
+      ? [
+          { to: '/', label: 'Accueil', icon: Home, end: true },
+          { to: '/validations', label: 'Validations', icon: ClipboardCheck, end: false, badge: totalEnAttente },
+          { to: '/produits', label: 'Produits', icon: Package, end: false },
+          { to: '/users', label: 'Utilisateurs', icon: Users, end: false },
+          { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: false },
+        ]
+      : [
+          ...BASE_ITEMS,
+          ...(role === 'responsable'
+            ? [{ to: '/validations', label: 'Validations', icon: ClipboardCheck, end: false, badge: totalEnAttente }]
+            : []),
+          ...(role === 'admin' ? [{ to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: false }] : []),
+        ]
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-20 flex border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)]">

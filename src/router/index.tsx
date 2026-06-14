@@ -15,6 +15,7 @@ import { ReceptionPage } from '../pages/ReceptionPage'
 import { HistoriquePage } from '../pages/HistoriquePage'
 import { ValidationsPage } from '../pages/ValidationsPage'
 import { DashboardPage } from '../pages/DashboardPage'
+import { ProduitsPage } from '../pages/ProduitsPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { UsersPage } from '../pages/UsersPage'
 import type { Role } from '../types'
@@ -68,6 +69,7 @@ function AppRoutes() {
         <Route path="/sortie" element={<NouvelleSortiePage />} />
         <Route path="/reception" element={<ReceptionPage />} />
         <Route path="/historique" element={<HistoriquePage />} />
+        <Route path="/produits" element={<ProduitsPage />} />
         <Route path="/parametres" element={<SettingsPage />} />
 
         <Route element={<RoleRoute roles={['responsable', 'proprietaire']} />}>
