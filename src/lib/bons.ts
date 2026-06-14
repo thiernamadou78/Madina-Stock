@@ -11,7 +11,7 @@ const BON_SORTIE_SELECT = `
   depot_destination:depots!bons_sortie_depot_destination_id_fkey(*)
 `
 
-async function fetchAdmins(roles: string[]): Promise<Utilisateur[]> {
+export async function fetchAdmins(roles: string[]): Promise<Utilisateur[]> {
   const { data } = await supabase
     .from('utilisateurs')
     .select('id, nom, role, contact_wa, actif')

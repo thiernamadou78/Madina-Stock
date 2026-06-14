@@ -9,7 +9,7 @@ import { approuverBon, rejeterBon } from '../lib/bons'
 import { Badge, statutToColor } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/modals/ConfirmModal'
-import type { BonReception, BonSortie, StockProduit } from '../types'
+import type { BonReception, BonSortie, CanalAppro, StockProduit } from '../types'
 
 type Selection = { type: 'sortie'; bon: BonSortie } | { type: 'reception'; bon: BonReception }
 type Action = 'approuve' | 'rejete' | 'valide'
@@ -19,6 +19,30 @@ const NIVEAU_COLORS: Record<StockProduit['statut_stock'], string> = {
   alerte: 'bg-amber-400',
   critique: 'bg-danger-400',
   rupture: 'bg-danger-600',
+}
+
+const CANAL_ICONS: Record<CanalAppro, string> = {
+  presentiel: '🤝',
+  appel: '📞',
+  app_mobile: '📱',
+  conteneur: '🚢',
+}
+
+const CANAL_LABELS: Record<CanalAppro, string> = {
+  presentiel: 'Présentiel',
+  appel: 'Appel',
+  app_mobile: 'App mobile',
+  conteneur: 'Conteneur',
+}
+
+function formatDateHeure(iso: string): string {
+  return new Date(iso).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 function StockComparisonBar({ stock, apres }: { stock: StockProduit; apres: number }) {
@@ -68,6 +92,7 @@ export function ValidationsPage() {
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [qtes, setQtes] = useState<Record<string, number>>({})
+  const [ligneEdits, setLigneEdits] = useState<Record<string, { valide: boolean; prix: number }>>({})
   const [confirmAction, setConfirmAction] = useState<Action | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +109,9 @@ export function ValidationsPage() {
 
   const openReception = (bon: BonReception) => {
     setSelection({ type: 'reception', bon })
+    setLigneEdits(
+      Object.fromEntries(bon.lignes.map((l) => [l.id, { valide: true, prix: l.prix_achat_unitaire ?? 0 }]))
+    )
     setError(null)
   }
 
@@ -150,7 +178,12 @@ export function ValidationsPage() {
     setLoading(true)
     setError(null)
 
-    const { error: err } = await statuerReception(selection.bon.id, 'valide')
+    const lignesOverride = selection.bon.lignes.map((l) => {
+      const edit = ligneEdits[l.id] ?? { valide: true, prix: l.prix_achat_unitaire ?? 0 }
+      return { ligneId: l.id, valide: edit.valide, prixAchat: edit.prix }
+    })
+
+    const { error: err } = await statuerReception(selection.bon.id, 'valide', lignesOverride)
 
     setLoading(false)
 
@@ -305,26 +338,75 @@ export function ValidationsPage() {
               Dépôt : <span className="font-medium text-gray-900">{reception.depot?.nom}</span>
             </div>
             <div>
-              Canal : <span className="font-medium text-gray-900">{reception.canal}</span>
+              Canal :{' '}
+              <span className="font-medium text-gray-900">
+                {CANAL_ICONS[reception.canal]} {CANAL_LABELS[reception.canal]}
+              </span>
+            </div>
+            {reception.reference_doc && (
+              <div>
+                Référence : <span className="font-medium text-gray-900">{reception.reference_doc}</span>
+              </div>
+            )}
+            <div>
+              Soumis le : <span className="font-medium text-gray-900">{formatDateHeure(reception.created_at)}</span>
+            </div>
+            <div>
+              Articles : <span className="font-medium text-gray-900">{reception.lignes.length}</span>
             </div>
           </div>
         </div>
 
         <div className="flex flex-col gap-2 rounded-2xl bg-white p-4 shadow-sm">
-          {reception.lignes.map((ligne) => (
-            <div key={ligne.id} className="flex items-center justify-between text-sm">
-              <span className="text-gray-700">
-                {ligne.produit?.nom} ({ligne.qte_recue} {ligne.produit?.unite})
-              </span>
-              <span className="font-medium text-gray-900">
-                {ligne.prix_achat_unitaire != null ? `${ligne.prix_achat_unitaire} GNF` : '-'}
-              </span>
-            </div>
-          ))}
+          {reception.lignes.map((ligne) => {
+            const edit = ligneEdits[ligne.id] ?? { valide: true, prix: ligne.prix_achat_unitaire ?? 0 }
+            const sousTotal = ligne.qte_recue * edit.prix
+
+            return (
+              <div key={ligne.id} className="flex items-center gap-3 border-b border-gray-50 py-2 last:border-0">
+                <input
+                  type="checkbox"
+                  aria-label={`Valider la ligne ${ligne.produit?.nom}`}
+                  checked={edit.valide}
+                  onChange={(e) =>
+                    setLigneEdits((prev) => ({
+                      ...prev,
+                      [ligne.id]: { ...edit, valide: e.target.checked },
+                    }))
+                  }
+                  className="h-4 w-4 rounded border-gray-300 text-brand-800 focus:ring-brand-400"
+                />
+
+                <div className="flex-1">
+                  <div className="text-sm text-gray-700">
+                    {ligne.produit?.nom} ({ligne.qte_recue} {ligne.produit?.unite})
+                  </div>
+                  <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                    <input
+                      type="number"
+                      min="0"
+                      aria-label={`Prix d'achat unitaire de ${ligne.produit?.nom}`}
+                      value={edit.prix}
+                      onChange={(e) =>
+                        setLigneEdits((prev) => ({
+                          ...prev,
+                          [ligne.id]: { ...edit, prix: Number(e.target.value) || 0 },
+                        }))
+                      }
+                      className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-right text-xs focus:border-brand-400 focus:outline-none"
+                    />
+                    <span>GNF / unité</span>
+                  </div>
+                </div>
+
+                <span className="text-sm font-medium text-gray-900">{sousTotal.toLocaleString()} GNF</span>
+              </div>
+            )
+          })}
           {reception.valeur_totale != null && (
             <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2 text-sm font-semibold text-gray-900">
               <span>Valeur totale</span>
-              <span>{reception.valeur_totale} GNF</span>
+              <span>{reception.valeur_totale.toLocaleString()} GNF</span>
             </div>
           )}
         </div>
@@ -403,9 +485,15 @@ export function ValidationsPage() {
               className="flex items-center justify-between rounded-2xl bg-white p-4 text-left shadow-sm"
             >
               <div>
-                <div className="font-medium text-gray-900">{reception.numero}</div>
+                <div className="font-medium text-gray-900">
+                  {CANAL_ICONS[reception.canal]} {reception.numero} — {reception.fournisseur}
+                </div>
                 <div className="text-xs text-gray-500">
-                  {reception.fournisseur} · {reception.depot?.nom}
+                  {reception.depot?.nom} · {formatDateHeure(reception.created_at)}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {reception.lignes.length} article{reception.lignes.length > 1 ? 's' : ''}
+                  {reception.valeur_totale != null && ` · ${reception.valeur_totale.toLocaleString()} GNF`}
                 </div>
               </div>
               <ChevronRight size={18} className="text-gray-400" />

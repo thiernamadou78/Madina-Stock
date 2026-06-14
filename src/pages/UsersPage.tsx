@@ -3,9 +3,10 @@ import { Building2, Check, KeyRound, Pencil, Plus, Power } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
+import { normaliserTelephone } from '../lib/utils'
 import type { Depot, Role } from '../types'
 
-const TEL_REGEX = /^\+224\d{9}$/
+const TEL_VALIDE_REGEX = /^\+224\d{9}$/
 
 const INPUT_CLASS =
   'mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-base focus:border-brand-400 focus:outline-none'
@@ -170,8 +171,9 @@ export function UsersPage() {
       setFormError('Le prénom doit contenir au moins 2 caractères')
       return
     }
-    if (!TEL_REGEX.test(form.tel.trim())) {
-      setFormError('Format de téléphone attendu : +224XXXXXXXXX')
+    const telNormalise = normaliserTelephone(form.tel.trim())
+    if (!TEL_VALIDE_REGEX.test(telNormalise)) {
+      setFormError('Numéro de téléphone invalide')
       return
     }
     if (!form.allDepots && form.depotIds.length === 0) {
@@ -185,7 +187,7 @@ export function UsersPage() {
       ? await supabase.rpc('modifier_gestionnaire', {
           p_user_id: editingId,
           p_nom: `${form.prenom} ${form.nom}`.trim(),
-          p_tel: form.tel.trim(),
+          p_tel: telNormalise,
           p_role: form.role,
           p_depot_ids: form.depotIds,
           p_all_depots: form.allDepots,
@@ -193,7 +195,7 @@ export function UsersPage() {
       : await supabase.rpc('creer_gestionnaire', {
           p_prenom: form.prenom.trim(),
           p_nom: form.nom.trim(),
-          p_tel: form.tel.trim(),
+          p_tel: telNormalise,
           p_role: form.role,
           p_depot_ids: form.depotIds,
           p_all_depots: form.allDepots,
@@ -399,10 +401,13 @@ export function UsersPage() {
               type="tel"
               value={form.tel}
               onChange={(e) => setForm((f) => ({ ...f, tel: e.target.value }))}
-              placeholder="+224620000001"
+              placeholder="Ex: 622 000 001"
               className={INPUT_CLASS}
             />
           </label>
+          <p className="text-xs text-gray-400">
+            Format accepté : 622 000 001 ou +224 622 000 001
+          </p>
 
           <label className="text-sm font-medium text-gray-700">
             Rôle

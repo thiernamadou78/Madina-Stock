@@ -25,6 +25,9 @@ export const MESSAGES = {
     `🟢 Stock rétabli — ${sp.produit.nom} — ${sp.qte_disponible} ${sp.produit.unite}(s)`,
   receptionValidee: (reception: BonReception) =>
     `✅ Votre réception ${reception.numero} a été validée`,
+  receptionSoumise: (r: BonReception) =>
+    `📥 Nouvelle réception ${r.numero} — ${r.fournisseur} — ` +
+    `${r.depot.nom} — ${r.valeur_totale?.toLocaleString()} GNF`,
 }
 
 /**

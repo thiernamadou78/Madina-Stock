@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
 import { notifier, MESSAGES } from '../lib/notifications'
+import { fetchAdmins } from '../lib/bons'
 import { verifierSeuils } from '../lib/alertes'
 import type { BonReception, CanalAppro } from '../types'
 
@@ -13,17 +14,24 @@ const RECEPTION_SELECT = `
   validateur:utilisateurs!bons_reception_valide_par_fkey(*)
 `
 
-interface NouvelleLigneReception {
-  produit_id: string
-  qte_recue: number
-  prix_achat_unitaire?: number | null
+interface NouvelleLigneReceptionInput {
+  produitId: string
+  qteRecue: number
+  prixAchatUnitaire: number
 }
 
-interface NouveauBonReception {
+interface NouvelleReceptionInput {
+  depotId: string
   fournisseur: string
   canal: CanalAppro
-  reference_doc?: string | null
-  lignes: NouvelleLigneReception[]
+  referenceDoc?: string
+  lignes: NouvelleLigneReceptionInput[]
+}
+
+interface LigneValidationInput {
+  ligneId: string
+  valide: boolean
+  prixAchat: number | null
 }
 
 /**
@@ -82,64 +90,77 @@ export function useReceptions() {
   }, [depotActifId, refresh])
 
   /**
-   * Crée un nouveau bon de réception avec ses lignes, en statut "en_attente".
-   * Le dépôt destination peut être différent du dépôt actif (réception pour un autre dépôt).
+   * Crée un nouveau bon de réception avec ses lignes, en statut "en_attente",
+   * puis notifie les propriétaires/responsables.
    */
-  const creerReception = useCallback(async (bon: NouveauBonReception, depotId?: string) => {
-    const depot = depotId ?? depotActifId
-
-    if (!depot || !user) {
-      return { error: 'Dépôt ou utilisateur non défini' }
+  const creerReception = useCallback(async (
+    data: NouvelleReceptionInput
+  ): Promise<{ success: boolean; numero?: string; error?: string }> => {
+    if (!user) {
+      return { success: false, error: 'Utilisateur non défini' }
     }
 
     const { data: numero } = await supabase.rpc('next_bon_reception_numero')
-
-    const valeurTotale = bon.lignes.reduce(
-      (total, ligne) => total + ligne.qte_recue * (ligne.prix_achat_unitaire ?? 0),
-      0
-    )
 
     const { data: created, error: err } = await supabase
       .from('bons_reception')
       .insert({
         numero,
         saisi_par: user.id,
-        depot_id: depot,
-        fournisseur: bon.fournisseur,
-        canal: bon.canal,
-        reference_doc: bon.reference_doc ?? null,
-        valeur_totale: valeurTotale,
+        depot_id: data.depotId,
+        fournisseur: data.fournisseur,
+        canal: data.canal,
+        reference_doc: data.referenceDoc ?? null,
       })
-      .select()
+      .select(RECEPTION_SELECT)
       .single()
 
     if (err || !created) {
-      return { error: err?.message ?? 'Erreur lors de la création de la réception' }
+      return { success: false, error: err?.message ?? 'Erreur lors de la création de la réception' }
     }
 
+    const reception = created as unknown as BonReception
+
     const { error: lignesErr } = await supabase.from('lignes_reception').insert(
-      bon.lignes.map((ligne) => ({
-        reception_id: created.id,
-        produit_id: ligne.produit_id,
-        qte_recue: ligne.qte_recue,
-        prix_achat_unitaire: ligne.prix_achat_unitaire ?? null,
+      data.lignes.map((ligne) => ({
+        reception_id: reception.id,
+        produit_id: ligne.produitId,
+        qte_recue: ligne.qteRecue,
+        prix_achat_unitaire: ligne.prixAchatUnitaire,
       }))
     )
 
     if (lignesErr) {
-      return { error: lignesErr.message }
+      return { success: false, error: lignesErr.message }
     }
 
+    const valeurTotale = data.lignes.reduce(
+      (total, ligne) => total + ligne.qteRecue * ligne.prixAchatUnitaire,
+      0
+    )
+
+    await supabase.from('bons_reception').update({ valeur_totale: valeurTotale }).eq('id', reception.id)
+
+    const admins = await fetchAdmins(['proprietaire', 'responsable'])
+    await notifier({
+      destinataires: admins,
+      titre: '📥 Nouvelle réception',
+      message: MESSAGES.receptionSoumise({ ...reception, valeur_totale: valeurTotale }),
+    })
+
     await refresh()
-    return { error: null, reception: created as BonReception }
-  }, [depotActifId, user, refresh])
+    return { success: true, numero: reception.numero }
+  }, [user, refresh])
 
   /**
-   * Valide ou rejette un bon de réception en attente.
+   * Valide ou rejette un bon de réception en attente. Pour une validation,
+   * `lignes` permet de transmettre l'état (cochée/prix) édité dans l'UI ;
+   * à défaut, l'état enregistré en base est utilisé.
    */
   const statuerReception = useCallback(async (
     receptionId: string,
-    statut: 'valide' | 'rejete'
+    statut: 'valide' | 'rejete',
+    lignes?: LigneValidationInput[]
   ) => {
     if (!user) return { error: 'Utilisateur non défini' }
 
@@ -162,13 +183,19 @@ export function useReceptions() {
     const reception = receptions.find((r) => r.id === receptionId)
     if (!reception) return { error: 'Réception introuvable' }
 
+    const lignesAEnvoyer = lignes ?? reception.lignes.map((ligne) => ({
+      ligneId: ligne.id,
+      valide: ligne.valide,
+      prixAchat: ligne.prix_achat_unitaire ?? null,
+    }))
+
     const { data: result, error: rpcErr } = await supabase.rpc('valider_reception', {
       p_reception_id: receptionId,
       p_validateur_id: user.id,
-      p_lignes: reception.lignes.map((ligne) => ({
-        ligne_id: ligne.id,
-        valide: ligne.valide,
-        prix_achat: ligne.prix_achat_unitaire ?? null,
+      p_lignes: lignesAEnvoyer.map((l) => ({
+        ligne_id: l.ligneId,
+        valide: l.valide,
+        prix_achat: l.prixAchat,
       })),
     })
 
