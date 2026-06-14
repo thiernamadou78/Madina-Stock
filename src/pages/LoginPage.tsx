@@ -7,22 +7,84 @@ import type { Utilisateur } from '../types'
 
 const PIN_LENGTH = 4
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+const TEL_REGEX = /^\+224\d{9}$/
+
+function PinDots({ value }: { value: string }) {
+  return (
+    <div className="mt-2 flex justify-center gap-3">
+      {Array.from({ length: PIN_LENGTH }).map((_, i) => (
+        <div
+          key={i}
+          className={`h-3 w-3 rounded-full ${i < value.length ? 'bg-brand-800' : 'bg-gray-200'}`}
+        />
+      ))}
+    </div>
+  )
+}
+
+function PinKeypad({
+  onDigit,
+  onBackspace,
+}: {
+  onDigit: (digit: string) => void
+  onBackspace: () => void
+}) {
+  return (
+    <div className="mt-4 grid grid-cols-3 gap-3">
+      {DIGITS.map((digit) => (
+        <button
+          key={digit}
+          type="button"
+          onClick={() => onDigit(digit)}
+          className="rounded-2xl bg-gray-50 py-4 text-2xl font-semibold text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+        >
+          {digit}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={onBackspace}
+        aria-label="Effacer"
+        className="flex items-center justify-center rounded-2xl bg-gray-50 py-4 text-gray-500 hover:bg-gray-100 active:bg-gray-200"
+      >
+        <Delete size={22} />
+      </button>
+      <button
+        type="button"
+        onClick={() => onDigit('0')}
+        className="rounded-2xl bg-gray-50 py-4 text-2xl font-semibold text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+      >
+        0
+      </button>
+      <div />
+    </div>
+  )
+}
 
 export function LoginPage() {
-  const { login, loading } = useAuth()
+  const { login, loginTel, loading } = useAuth()
   const navigate = useNavigate()
+
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([])
-  const [utilisateurId, setUtilisateurId] = useState('')
-  const [pin, setPin] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const [chargementUtilisateurs, setChargementUtilisateurs] = useState(true)
   const [erreurUtilisateurs, setErreurUtilisateurs] = useState<string | null>(null)
+
+  // --- Section propriétaire ---
+  const [proprietaireId, setProprietaireId] = useState('')
+  const [pinProprietaire, setPinProprietaire] = useState('')
+  const [erreurProprietaire, setErreurProprietaire] = useState<string | null>(null)
+
+  // --- Section gestionnaire ---
+  const [tel, setTel] = useState('')
+  const [pinGestionnaire, setPinGestionnaire] = useState('')
+  const [erreurGestionnaire, setErreurGestionnaire] = useState<string | null>(null)
 
   useEffect(() => {
     listerUtilisateurs()
       .then((users) => {
         setUtilisateurs(users)
-        if (users.length > 0) setUtilisateurId(users[0].id)
+        const proprietaires = users.filter((u) => u.role === 'proprietaire')
+        if (proprietaires.length > 0) setProprietaireId(proprietaires[0].id)
       })
       .catch((err) => {
         console.error('Erreur chargement utilisateurs:', err)
@@ -31,25 +93,51 @@ export function LoginPage() {
       .finally(() => setChargementUtilisateurs(false))
   }, [])
 
-  const handleDigit = (digit: string) => {
-    if (pin.length >= PIN_LENGTH) return
-    setError(null)
-    setPin((p) => p + digit)
+  const proprietaires = utilisateurs.filter((u) => u.role === 'proprietaire')
+
+  const handleDigitProprietaire = (digit: string) => {
+    if (pinProprietaire.length >= PIN_LENGTH) return
+    setErreurProprietaire(null)
+    setPinProprietaire((p) => p + digit)
   }
 
-  const handleBackspace = () => {
-    setError(null)
-    setPin((p) => p.slice(0, -1))
+  const handleBackspaceProprietaire = () => {
+    setErreurProprietaire(null)
+    setPinProprietaire((p) => p.slice(0, -1))
   }
 
-  const handleSubmit = async () => {
-    const utilisateur = utilisateurs.find((u) => u.id === utilisateurId)
-    if (!utilisateur || pin.length !== PIN_LENGTH) return
+  const handleSubmitProprietaire = async () => {
+    const utilisateur = proprietaires.find((u) => u.id === proprietaireId)
+    if (!utilisateur || pinProprietaire.length !== PIN_LENGTH) return
 
-    const { user, error: err } = await login(utilisateur.nom, pin)
+    const { user, error: err } = await login(utilisateur.nom, pinProprietaire)
     if (err || !user) {
-      setError('Code PIN incorrect')
-      setPin('')
+      setErreurProprietaire('Code PIN incorrect')
+      setPinProprietaire('')
+      return
+    }
+
+    navigate('/select-depot')
+  }
+
+  const handleDigitGestionnaire = (digit: string) => {
+    if (pinGestionnaire.length >= PIN_LENGTH) return
+    setErreurGestionnaire(null)
+    setPinGestionnaire((p) => p + digit)
+  }
+
+  const handleBackspaceGestionnaire = () => {
+    setErreurGestionnaire(null)
+    setPinGestionnaire((p) => p.slice(0, -1))
+  }
+
+  const handleSubmitGestionnaire = async () => {
+    if (!TEL_REGEX.test(tel.trim()) || pinGestionnaire.length !== PIN_LENGTH) return
+
+    const { user, error: err } = await loginTel(tel.trim(), pinGestionnaire)
+    if (err || !user) {
+      setErreurGestionnaire('Téléphone ou code PIN incorrect')
+      setPinGestionnaire('')
       return
     }
 
@@ -57,18 +145,21 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-brand-800 px-6">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <div className="flex flex-col items-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-800 text-xl font-bold text-white">
-            MS
-          </div>
-          <h1 className="mt-3 text-2xl font-bold text-brand-800">MadinaStock</h1>
-          <p className="mt-1 text-sm text-gray-500">Gestion de stock multi-dépôts</p>
+    <div className="flex min-h-screen flex-col items-center bg-brand-800 px-6 py-8">
+      <div className="flex w-full max-w-sm flex-col items-center text-white">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-xl font-bold text-brand-800">
+          MS
         </div>
+        <h1 className="mt-3 text-2xl font-bold">MadinaStock</h1>
+        <p className="mt-1 text-sm text-white/70">Gestion de stock multi-dépôts</p>
+      </div>
 
-        <label className="mt-6 block text-sm font-medium text-gray-700">
-          Utilisateur
+      {/* Section Propriétaire */}
+      <div className="mt-6 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Propriétaire</h2>
+
+        <label className="mt-4 block text-sm font-medium text-gray-700">
+          Nom
           {chargementUtilisateurs ? (
             <div className="mt-1 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-400">
               Chargement...
@@ -77,23 +168,23 @@ export function LoginPage() {
             <div className="mt-1 rounded-xl border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-600">
               {erreurUtilisateurs}
             </div>
-          ) : utilisateurs.length === 0 ? (
+          ) : proprietaires.length === 0 ? (
             <div className="mt-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-600">
-              Aucun utilisateur trouvé — vérifiez la connexion Supabase
+              Aucun propriétaire trouvé
             </div>
           ) : (
             <select
-              value={utilisateurId}
+              value={proprietaireId}
               onChange={(e) => {
-                setUtilisateurId(e.target.value)
-                setPin('')
-                setError(null)
+                setProprietaireId(e.target.value)
+                setPinProprietaire('')
+                setErreurProprietaire(null)
               }}
               className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
             >
-              {utilisateurs.map((u) => (
+              {proprietaires.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.nom} — {u.role}
+                  {u.nom}
                 </option>
               ))}
             </select>
@@ -102,54 +193,61 @@ export function LoginPage() {
 
         <div className="mt-4">
           <span className="block text-sm font-medium text-gray-700">Code PIN</span>
-          <div className="mt-2 flex justify-center gap-3">
-            {Array.from({ length: PIN_LENGTH }).map((_, i) => (
-              <div
-                key={i}
-                className={`h-3 w-3 rounded-full ${i < pin.length ? 'bg-brand-800' : 'bg-gray-200'}`}
-              />
-            ))}
-          </div>
+          <PinDots value={pinProprietaire} />
         </div>
 
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          {DIGITS.map((digit) => (
-            <button
-              key={digit}
-              type="button"
-              onClick={() => handleDigit(digit)}
-              className="rounded-2xl bg-gray-50 py-4 text-2xl font-semibold text-gray-700 hover:bg-gray-100 active:bg-gray-200"
-            >
-              {digit}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={handleBackspace}
-            aria-label="Effacer"
-            className="flex items-center justify-center rounded-2xl bg-gray-50 py-4 text-gray-500 hover:bg-gray-100 active:bg-gray-200"
-          >
-            <Delete size={22} />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleDigit('0')}
-            className="rounded-2xl bg-gray-50 py-4 text-2xl font-semibold text-gray-700 hover:bg-gray-100 active:bg-gray-200"
-          >
-            0
-          </button>
-          <div />
-        </div>
+        <PinKeypad onDigit={handleDigitProprietaire} onBackspace={handleBackspaceProprietaire} />
 
-        {error && <p className="mt-3 text-center text-sm text-danger-600">{error}</p>}
+        {erreurProprietaire && (
+          <p className="mt-3 text-center text-sm text-danger-600">{erreurProprietaire}</p>
+        )}
 
         <Button
           fullWidth
           className="mt-4"
-          onClick={handleSubmit}
-          disabled={loading || !utilisateurId || pin.length !== PIN_LENGTH}
+          onClick={handleSubmitProprietaire}
+          disabled={loading || chargementUtilisateurs || !proprietaireId || pinProprietaire.length !== PIN_LENGTH}
         >
-          {loading ? 'Connexion...' : 'Connexion'}
+          {loading ? 'Connexion...' : 'Se connecter'}
+        </Button>
+      </div>
+
+      {/* Section Gestionnaire */}
+      <div className="mt-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Gestionnaire</h2>
+
+        <label className="mt-4 block text-sm font-medium text-gray-700">
+          Numéro de téléphone
+          <input
+            type="tel"
+            value={tel}
+            onChange={(e) => {
+              setTel(e.target.value)
+              setErreurGestionnaire(null)
+            }}
+            placeholder="+224620000001"
+            className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+          />
+        </label>
+
+        <div className="mt-4">
+          <span className="block text-sm font-medium text-gray-700">Code PIN</span>
+          <PinDots value={pinGestionnaire} />
+        </div>
+
+        <PinKeypad onDigit={handleDigitGestionnaire} onBackspace={handleBackspaceGestionnaire} />
+
+        {erreurGestionnaire && (
+          <p className="mt-3 text-center text-sm text-danger-600">{erreurGestionnaire}</p>
+        )}
+
+        <Button
+          fullWidth
+          className="mt-4"
+          onClick={handleSubmitGestionnaire}
+          disabled={loading || !TEL_REGEX.test(tel.trim()) || pinGestionnaire.length !== PIN_LENGTH}
+        >
+          {loading ? 'Connexion...' : 'Se connecter'}
         </Button>
       </div>
     </div>

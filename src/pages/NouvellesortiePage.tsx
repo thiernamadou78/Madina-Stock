@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeftRight, CheckCircle2, Minus, Plus, Search, ShoppingCart } from 'lucide-react'
+import { ArrowLeftRight, CheckCircle2, Clock, Minus, Plus, Search, ShoppingCart } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useStock } from '../hooks/useStock'
 import { useAppStore } from '../stores/appStore'
-import { creerBonSortie } from '../lib/bons'
+import { creerBonSortie, sortieDirecte } from '../lib/bons'
 import { Button } from '../components/ui/Button'
-import type { BonSortie, Depot, MotifSortie } from '../types'
+import type { Depot, MotifSortie, StatutBon } from '../types'
 
 const MOTIFS: { value: MotifSortie; label: string; icon: string }[] = [
   { value: 'vente', label: 'Vente', icon: '🛒' },
@@ -30,7 +30,9 @@ export function NouvelleSortiePage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [bonCree, setBonCree] = useState<BonSortie | null>(null)
+  const [bonCree, setBonCree] = useState<{ numero: string; statut: StatutBon } | null>(null)
+
+  const isProprietaire = user?.role === 'proprietaire'
 
   useEffect(() => {
     if (motif !== 'transfert') return
@@ -73,13 +75,15 @@ export function NouvelleSortiePage() {
     setLoading(true)
     setError(null)
 
-    const result = await creerBonSortie({
+    const params = {
       depotId: depotActifId,
       gestionnairId: user.id,
       motif,
       depotDestinationId: motif === 'transfert' ? depotDestinationId : undefined,
       lignes: [{ produitId, qteDemandee: quantite }],
-    })
+    }
+
+    const result = isProprietaire ? await sortieDirecte(params) : await creerBonSortie(params)
 
     setLoading(false)
 
@@ -108,7 +112,13 @@ export function NouvelleSortiePage() {
         </div>
         <h1 className="text-lg font-bold text-gray-900">Bon de sortie créé</h1>
         <p className="text-2xl font-bold text-brand-800">{bonCree.numero}</p>
-        <p className="text-sm text-gray-500">En attente de validation</p>
+        {bonCree.statut === 'approuve' ? (
+          <p className="text-sm font-medium text-brand-600">
+            Sortie immédiate — aucune validation requise
+          </p>
+        ) : (
+          <p className="text-sm text-gray-500">En attente de validation du propriétaire</p>
+        )}
 
         <div className="mt-4 flex w-full flex-col gap-3">
           <Button fullWidth onClick={handleNouveauBon}>
@@ -125,6 +135,18 @@ export function NouvelleSortiePage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-bold text-gray-900">Nouvelle sortie</h1>
+
+      {isProprietaire ? (
+        <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm font-medium text-brand-800">
+          <CheckCircle2 size={16} />
+          Sortie immédiate — aucune validation requise
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-medium text-amber-600">
+          <Clock size={16} />
+          En attente de validation du propriétaire
+        </div>
+      )}
 
       <div>
         <span className="mb-2 block text-sm font-medium text-gray-700">Motif</span>

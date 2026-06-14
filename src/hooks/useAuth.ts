@@ -22,6 +22,32 @@ export async function listerUtilisateurs(): Promise<Utilisateur[]> {
   return (data ?? []) as unknown as Utilisateur[]
 }
 
+async function fetchAllDepotsFlag(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('utilisateurs')
+    .select('all_depots')
+    .eq('id', userId)
+    .single()
+
+  return (data as { all_depots?: boolean } | null)?.all_depots ?? false
+}
+
+async function fetchDepotsForUser(userId: string, allDepots: boolean): Promise<Depot[]> {
+  if (allDepots) {
+    const { data } = await supabase.from('depots').select('*').eq('actif', true)
+    return (data ?? []) as unknown as Depot[]
+  }
+
+  const { data } = await supabase
+    .from('utilisateurs_depots')
+    .select('depot:depots(*)')
+    .eq('utilisateur_id', userId)
+
+  return (data ?? [])
+    .map((row) => row.depot as unknown as Depot)
+    .filter(Boolean)
+}
+
 export function useAuth() {
   const user = useAppStore((s) => s.user)
   const depots = useAppStore((s) => s.depots)
@@ -35,8 +61,33 @@ export function useAuth() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [attempts, setAttempts] = useState(0)
 
+  const finalizeLogin = useCallback(async (row: {
+    id: string
+    nom: string
+    role: string
+    contact_wa: string | null
+  }): Promise<LoginResult> => {
+    const allDepots = await fetchAllDepotsFlag(row.id)
+    const utilisateur: Utilisateur = {
+      id: row.id,
+      nom: row.nom,
+      role: row.role as Role,
+      contact_wa: row.contact_wa ?? undefined,
+      actif: true,
+      all_depots: allDepots,
+    }
+
+    setAttempts(0)
+    setUser(utilisateur)
+
+    const depotsUtilisateur = await fetchDepotsForUser(utilisateur.id, allDepots)
+    setDepots(depotsUtilisateur)
+
+    return { user: utilisateur, error: null }
+  }, [setUser, setDepots])
+
   /**
-   * Connexion par nom + code PIN.
+   * Connexion propriétaire par nom + code PIN.
    * La vérification du hash bcrypt est déléguée à une fonction RPC
    * Supabase (`verify_pin`) afin de ne jamais exposer le hash au client.
    */
@@ -53,34 +104,33 @@ export function useAuth() {
         return { user: null, error: 'Code PIN incorrect' }
       }
 
-      const row = data[0] as { id: string; nom: string; role: string; contact_wa: string | null }
-      const utilisateur: Utilisateur = {
-        id: row.id,
-        nom: row.nom,
-        role: row.role as Role,
-        contact_wa: row.contact_wa ?? undefined,
-        actif: true,
-      }
-
-      setAttempts(0)
-      setUser(utilisateur)
-
-      const { data: depotsData } = await supabase
-        .from('utilisateurs_depots')
-        .select('depot:depots(*)')
-        .eq('utilisateur_id', utilisateur.id)
-
-      const depotsUtilisateur = (depotsData ?? [])
-        .map((row) => row.depot as unknown as Depot)
-        .filter(Boolean)
-
-      setDepots(depotsUtilisateur)
-
-      return { user: utilisateur, error: null }
+      return await finalizeLogin(data[0] as { id: string; nom: string; role: string; contact_wa: string | null })
     } finally {
       setLoading(false)
     }
-  }, [setUser, setDepots])
+  }, [finalizeLogin])
+
+  /**
+   * Connexion gestionnaire par numéro de téléphone (contact_wa) + code PIN.
+   */
+  const loginTel = useCallback(async (tel: string, codePin: string): Promise<LoginResult> => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.rpc('verify_pin_tel', {
+        p_tel: tel,
+        p_pin: codePin,
+      })
+
+      if (error || !data || data.length === 0) {
+        setAttempts((a) => a + 1)
+        return { user: null, error: 'Téléphone ou code PIN incorrect' }
+      }
+
+      return await finalizeLogin(data[0] as { id: string; nom: string; role: string; contact_wa: string | null })
+    } finally {
+      setLoading(false)
+    }
+  }, [finalizeLogin])
 
   /**
    * Ouvre une session de gestionnaire pour le dépôt sélectionné.
@@ -120,6 +170,7 @@ export function useAuth() {
     loading,
     attempts,
     login,
+    loginTel,
     logout,
     ouvrirSession,
     isAuthenticated: !!user,

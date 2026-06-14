@@ -14,6 +14,8 @@ export interface Utilisateur {
   role: Role
   contact_wa?: string
   actif: boolean
+  all_depots?: boolean
+  pin_change_required?: boolean
 }
 
 export interface Depot {

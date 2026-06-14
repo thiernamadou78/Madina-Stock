@@ -16,6 +16,7 @@ import { HistoriquePage } from '../pages/HistoriquePage'
 import { ValidationsPage } from '../pages/ValidationsPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { SettingsPage } from '../pages/SettingsPage'
+import { UsersPage } from '../pages/UsersPage'
 import type { Role } from '../types'
 
 function AppLayout() {
@@ -75,6 +76,10 @@ function AppRoutes() {
 
         <Route element={<RoleRoute roles={['admin', 'proprietaire']} />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+        </Route>
+
+        <Route element={<RoleRoute roles={['proprietaire']} />}>
+          <Route path="/users" element={<UsersPage />} />
         </Route>
       </Route>
 

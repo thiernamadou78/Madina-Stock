@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeftRight,
+  ClipboardCheck,
   History,
+  LayoutDashboard,
   PackageMinus,
   PackagePlus,
+  Users,
   Wifi,
   WifiOff,
 } from 'lucide-react'
@@ -24,8 +27,11 @@ const DOT_COLORS: Record<string, string> = {
 
 export function HomePage() {
   const depotActifId = useAppStore((s) => s.depotActifId)
+  const role = useAppStore((s) => s.user?.role)
+  const isProprietaire = role === 'proprietaire'
   const { stock, alertes, loading, refresh: refreshStock } = useStock()
   const [bonsJour, setBonsJour] = useState(0)
+  const [bonsEnAttente, setBonsEnAttente] = useState(0)
   const [online, setOnline] = useState(navigator.onLine)
 
   useExpiration(refreshStock)
@@ -62,6 +68,16 @@ export function HomePage() {
       setBonsJour((sortieRes.count ?? 0) + (receptionRes.count ?? 0))
     })
   }, [depotActifId])
+
+  useEffect(() => {
+    if (!isProprietaire) return
+
+    supabase
+      .from('bons_sortie')
+      .select('id', { count: 'exact', head: true })
+      .eq('statut', 'en_attente')
+      .then(({ count }) => setBonsEnAttente(count ?? 0))
+  }, [isProprietaire])
 
   const kpis = [
     { label: 'Articles', value: stock.length, color: 'bg-brand-50 text-brand-800' },
@@ -111,6 +127,39 @@ export function HomePage() {
           </Button>
         </Link>
       </div>
+
+      {isProprietaire && (
+        <div className="flex flex-col gap-3">
+          <Link
+            to="/validations"
+            className="flex items-center justify-between rounded-2xl bg-amber-50 p-4 text-amber-700"
+          >
+            <div>
+              <div className="text-2xl font-bold">{bonsEnAttente}</div>
+              <div className="text-xs font-medium">Bons en attente (tous dépôts)</div>
+            </div>
+            <ClipboardCheck size={24} />
+          </Link>
+
+          <div className="grid grid-cols-3 gap-3">
+            <Link to="/validations">
+              <Button fullWidth variant="secondary" size="sm" icon={<ClipboardCheck size={16} />}>
+                Validations
+              </Button>
+            </Link>
+            <Link to="/users">
+              <Button fullWidth variant="secondary" size="sm" icon={<Users size={16} />}>
+                Utilisateurs
+              </Button>
+            </Link>
+            <Link to="/dashboard">
+              <Button fullWidth variant="secondary" size="sm" icon={<LayoutDashboard size={16} />}>
+                Dashboard
+              </Button>
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl bg-white p-4 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-gray-700">Stock du dépôt</h2>

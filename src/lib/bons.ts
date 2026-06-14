@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { notifier, MESSAGES } from './notifications'
 import { verifierSeuils } from './alertes'
-import type { BonSortie, MotifSortie, Utilisateur } from '../types'
+import type { BonSortie, MotifSortie, StatutBon, Utilisateur } from '../types'
 
 const BON_SORTIE_SELECT = `
   *,
@@ -84,6 +84,52 @@ export async function creerBonSortie(data: {
   })
 
   return { success: true, bon }
+}
+
+/**
+ * Sortie directe (propriétaire) : débite immédiatement le stock disponible
+ * et crée un bon déjà au statut "approuve", sans passer par la file de
+ * validation. La vérification de disponibilité et le débit sont effectués
+ * atomiquement côté base via la fonction RPC `sortie_directe`.
+ */
+export async function sortieDirecte(data: {
+  depotId: string
+  gestionnairId: string
+  motif: MotifSortie
+  depotDestinationId?: string
+  lignes: Array<{ produitId: string; qteDemandee: number }>
+}): Promise<{ success: boolean; error?: string; bon?: { numero: string; statut: StatutBon } }> {
+  if (data.lignes.length === 0) {
+    return { success: false, error: 'Le bon doit contenir au moins une ligne' }
+  }
+
+  const { data: result, error: rpcErr } = await supabase.rpc('sortie_directe', {
+    p_gestionnaire_id: data.gestionnairId,
+    p_depot_id: data.depotId,
+    p_motif: data.motif,
+    p_depot_destination_id: data.depotDestinationId ?? null,
+    p_lignes: data.lignes.map((ligne) => ({
+      produit_id: ligne.produitId,
+      qte_demandee: ligne.qteDemandee,
+    })),
+  })
+
+  if (rpcErr) {
+    return { success: false, error: rpcErr.message }
+  }
+
+  if (!result?.success) {
+    const error =
+      result?.disponible !== undefined
+        ? `${result.error} (disponible: ${result.disponible}, demandé: ${result.demande})`
+        : result?.error ?? 'Erreur lors de la création du bon'
+
+    return { success: false, error }
+  }
+
+  await verifierSeuils(data.depotId, data.lignes.map((l) => l.produitId))
+
+  return { success: true, bon: { numero: result.numero as string, statut: 'approuve' } }
 }
 
 /**
