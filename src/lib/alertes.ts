@@ -18,7 +18,7 @@ export async function verifierSeuils(depotId: string, produitIds: string[]): Pro
 
   const { data } = await supabase
     .from('stock_produits')
-    .select('*, produit:produits(*)')
+    .select('*, produit:produits(*), depot:depots(*)')
     .eq('depot_id', depotId)
     .in('produit_id', produitIds)
 
@@ -67,9 +67,11 @@ export async function verifierSeuils(depotId: string, produitIds: string[]): Pro
 
     await notifier({
       destinataires: (admins ?? []) as unknown as Utilisateur[],
-      titre: type === 'levee' ? '🟢 Stock rétabli' : '⚠️ Alerte stock',
+      titre: type === 'levee' ? '🟢 Stock rétabli' : type === 'alerte' ? '⚠️ Alerte stock' : '🚨 Stock critique',
       message,
       canal: 'auto',
+      priorite: type === 'critique' || type === 'rupture' ? 'critique' : 'normale',
+      type: type === 'levee' ? 'alerte_levee' : 'alerte',
     })
   }
 }

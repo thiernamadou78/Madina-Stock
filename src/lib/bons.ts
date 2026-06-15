@@ -101,6 +101,8 @@ export async function creerBonSortie(data: {
     destinataires: admins,
     titre: '📦 Nouveau bon',
     message: MESSAGES.bonSoumis(bon),
+    priorite: 'haute',
+    type: 'bon_soumis',
   })
 
   return { success: true, bon }
@@ -184,11 +186,27 @@ export async function approuverBon(
     return { success: false, error: 'Bon approuvé mais impossible de le récupérer' }
   }
 
-  await notifier({
-    destinataires: bon.gestionnaire ? [bon.gestionnaire] : [],
-    titre: '✅ Bon approuvé',
-    message: MESSAGES.bonApprouve(bon),
-  })
+  if (bon.gestionnaire) {
+    await notifier({
+      destinataires: [bon.gestionnaire],
+      titre: '✅ Bon approuvé',
+      message: MESSAGES.bonApprouve(bon),
+      canal: 'auto',
+      type: 'bon_approuve',
+    })
+  }
+
+  const validateurs = await fetchUtilisateursByIds([validateurId])
+  const validateur = validateurs.get(validateurId)
+  if (validateur) {
+    await notifier({
+      destinataires: [validateur],
+      titre: '✅ Validation confirmée',
+      message: `Bon ${bon.numero} validé avec succès`,
+      canal: 'push',
+      type: 'bon_approuve',
+    })
+  }
 
   await verifierSeuils(bon.depot_id, bon.lignes.map((l) => l.produit_id))
 
@@ -225,6 +243,9 @@ export async function rejeterBon(
     destinataires: bon.gestionnaire ? [bon.gestionnaire] : [],
     titre: '❌ Bon rejeté',
     message: MESSAGES.bonRejete(bon),
+    canal: 'auto',
+    priorite: 'haute',
+    type: 'bon_rejete',
   })
 
   return { success: true, bon }

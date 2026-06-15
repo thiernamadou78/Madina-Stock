@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
+import { demanderPermissionPush } from '../lib/notifications'
 import type { Depot, Role, Utilisateur } from '../types'
 
 interface LoginResult {
@@ -102,6 +103,10 @@ export function useAuth() {
 
     const depotsUtilisateur = await chargerDepots(utilisateur)
     setDepots(depotsUtilisateur)
+
+    // Demande la permission de notification dès la connexion, sans attendre
+    // une navigation, pour que les push fonctionnent même app fermée.
+    void demanderPermissionPush()
 
     return { user: utilisateur, error: null }
   }, [setUser, setDepots])

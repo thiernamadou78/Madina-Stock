@@ -9,6 +9,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       strategies: 'generateSW',
+      workbox: {
+        importScripts: ['sw-push.js'],
+      },
       manifest: {
         name: 'MadinaStock',
         short_name: 'MadinaStock',

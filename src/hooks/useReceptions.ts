@@ -169,6 +169,8 @@ export function useReceptions() {
       destinataires: admins,
       titre: '📥 Nouvelle réception',
       message: MESSAGES.receptionSoumise({ ...reception, valeur_totale: valeurTotale }),
+      priorite: 'haute',
+      type: 'reception',
     })
 
     await refresh()
@@ -187,6 +189,9 @@ export function useReceptions() {
   ) => {
     if (!user) return { error: 'Utilisateur non défini' }
 
+    const reception = receptions.find((r) => r.id === receptionId)
+    if (!reception) return { error: 'Réception introuvable' }
+
     if (statut === 'rejete') {
       const { error: err } = await supabase
         .from('bons_reception')
@@ -199,12 +204,19 @@ export function useReceptions() {
 
       if (err) return { error: err.message }
 
+      if (reception.saisisseur) {
+        await notifier({
+          destinataires: [reception.saisisseur],
+          titre: '❌ Réception rejetée',
+          message: MESSAGES.receptionRejetee(reception),
+          canal: 'auto',
+          type: 'reception',
+        })
+      }
+
       await refresh()
       return { error: null }
     }
-
-    const reception = receptions.find((r) => r.id === receptionId)
-    if (!reception) return { error: 'Réception introuvable' }
 
     const lignesAEnvoyer = lignes ?? reception.lignes.map((ligne) => ({
       ligneId: ligne.id,
@@ -230,6 +242,8 @@ export function useReceptions() {
         destinataires: [reception.saisisseur],
         titre: '✅ Réception validée',
         message: MESSAGES.receptionValidee(reception),
+        canal: 'auto',
+        type: 'reception',
       })
     }
 

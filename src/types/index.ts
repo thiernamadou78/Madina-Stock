@@ -40,6 +40,7 @@ export interface StockProduit {
   depot_id: string
   produit_id: string
   produit: Produit
+  depot?: Depot
   qte_disponible: number
   qte_reservee: number
   qte_nette: number // qte_disponible - qte_reservee (calculé)
@@ -103,5 +104,22 @@ export interface BonReception {
   valide_le?: string
   valeur_totale?: number
   lignes: LigneReception[]
+  created_at: string
+}
+
+export type NotificationType =
+  | 'bon_soumis'
+  | 'bon_approuve'
+  | 'bon_rejete'
+  | 'reception'
+  | 'alerte'
+  | 'alerte_levee'
+
+export interface NotificationItem {
+  id: string
+  titre: string
+  message: string
+  type: NotificationType
+  lu: boolean
   created_at: string
 }
