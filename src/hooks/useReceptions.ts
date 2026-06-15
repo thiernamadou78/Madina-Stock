@@ -3,8 +3,6 @@ import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
 import { notifier, MESSAGES } from '../lib/notifications'
 import { fetchAdmins, fetchUtilisateursByIds } from '../lib/bons'
-import { validerReception, rejeterReception } from '../lib/receptions'
-import type { LigneValidationInput } from '../lib/receptions'
 import type { BonReception, CanalAppro } from '../types'
 
 export const RECEPTION_SELECT = `
@@ -172,32 +170,5 @@ export function useReceptions() {
     return { success: true, numero: reception.numero }
   }, [user, refresh])
 
-  /**
-   * Valide ou rejette un bon de réception en attente. Pour une validation,
-   * `lignes` permet de transmettre l'état (cochée/prix) édité dans l'UI ;
-   * à défaut, l'état enregistré en base est utilisé.
-   */
-  const statuerReception = useCallback(async (
-    receptionId: string,
-    statut: 'valide' | 'rejete',
-    lignes?: LigneValidationInput[]
-  ) => {
-    if (!user) return { error: 'Utilisateur non défini' }
-
-    const reception = receptions.find((r) => r.id === receptionId)
-    if (!reception) return { error: 'Réception introuvable' }
-
-    const { error } = statut === 'rejete'
-      ? await rejeterReception(reception, user.id)
-      : await validerReception(reception, user.id, lignes)
-
-    if (error) return { error }
-
-    await refresh()
-    return { error: null }
-  }, [user, receptions, refresh])
-
-  const enAttente = receptions.filter((r) => r.statut === 'en_attente').length
-
-  return { receptions, enAttente, loading, error, refresh, creerReception, statuerReception }
+  return { receptions, loading, error, refresh, creerReception }
 }

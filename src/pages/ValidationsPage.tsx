@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
-import { useBons } from '../hooks/useBons'
-import { useReceptions } from '../hooks/useReceptions'
-import { useStock, computeStatutStock } from '../hooks/useStock'
+import { supabase } from '../lib/supabase'
+import { useValidationsEnAttente } from '../hooks/useValidationsEnAttente'
+import { computeStatutStock, enrichirStock } from '../hooks/useStock'
 import { useExpiration } from '../hooks/useExpiration'
 import { useAppStore } from '../stores/appStore'
 import { approuverBon, rejeterBon } from '../lib/bons'
+import { validerReception, rejeterReception } from '../lib/receptions'
 import { Badge, statutToColor } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/modals/ConfirmModal'
@@ -81,14 +82,10 @@ function StockComparisonBar({ stock, apres }: { stock: StockProduit; apres: numb
 
 export function ValidationsPage() {
   const user = useAppStore((s) => s.user)
-  const { bons, refresh: refreshBons } = useBons()
-  const { receptions, statuerReception, refresh: refreshReceptions } = useReceptions()
-  const { stock } = useStock()
+  const { bonsEnAttente, receptionsEnAttente, refresh } = useValidationsEnAttente()
+  const [stockDepot, setStockDepot] = useState<StockProduit[]>([])
 
-  useExpiration(() => {
-    refreshBons()
-    refreshReceptions()
-  })
+  useExpiration(() => refresh())
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [qtes, setQtes] = useState<Record<string, number>>({})
@@ -97,9 +94,30 @@ export function ValidationsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const bonsEnAttente = bons.filter((b) => b.statut === 'en_attente')
-  const receptionsEnAttente = receptions.filter((r) => r.statut === 'en_attente')
   const totalEnAttente = bonsEnAttente.length + receptionsEnAttente.length
+
+  // Le stock affiché dans la comparaison "avant/après" doit toujours
+  // correspondre au dépôt DU BON sélectionné, pas au dépôt actif de
+  // l'utilisateur (le propriétaire peut valider depuis n'importe quel dépôt).
+  useEffect(() => {
+    if (selection?.type !== 'sortie') {
+      setStockDepot([])
+      return
+    }
+
+    let cancelled = false
+    supabase
+      .from('stock_produits')
+      .select('*, produit:produits(*)')
+      .eq('depot_id', selection.bon.depot_id)
+      .then(({ data }) => {
+        if (!cancelled) setStockDepot(((data ?? []) as unknown as StockProduit[]).map(enrichirStock))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selection])
 
   const openSortie = (bon: BonSortie) => {
     setSelection({ type: 'sortie', bon })
@@ -140,7 +158,7 @@ export function ValidationsPage() {
       return
     }
 
-    await refreshBons()
+    await refresh()
     close()
   }
 
@@ -157,23 +175,22 @@ export function ValidationsPage() {
         setLoading(false)
         return
       }
-      await refreshBons()
     } else {
-      const { error: err } = await statuerReception(selection.bon.id, 'rejete')
+      const { error: err } = await rejeterReception(selection.bon, user.id)
       if (err) {
         setError(err)
         setLoading(false)
         return
       }
-      await refreshReceptions()
     }
 
+    await refresh()
     setLoading(false)
     close()
   }
 
   const handleValiderReception = async () => {
-    if (selection?.type !== 'reception') return
+    if (selection?.type !== 'reception' || !user) return
 
     setLoading(true)
     setError(null)
@@ -183,7 +200,7 @@ export function ValidationsPage() {
       return { ligneId: l.id, valide: edit.valide, prixAchat: edit.prix }
     })
 
-    const { error: err } = await statuerReception(selection.bon.id, 'valide', lignesOverride)
+    const { error: err } = await validerReception(selection.bon, user.id, lignesOverride)
 
     setLoading(false)
 
@@ -192,7 +209,7 @@ export function ValidationsPage() {
       return
     }
 
-    await refreshReceptions()
+    await refresh()
     close()
   }
 
@@ -237,7 +254,7 @@ export function ValidationsPage() {
 
         <div className="flex flex-col gap-3">
           {bon.lignes.map((ligne) => {
-            const stockLigne = stock.find((s) => s.produit_id === ligne.produit_id)
+            const stockLigne = stockDepot.find((s) => s.produit_id === ligne.produit_id)
             const qte = qtes[ligne.id] ?? ligne.qte_demandee
 
             return (

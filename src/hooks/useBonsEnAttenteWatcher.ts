@@ -130,8 +130,14 @@ export function useBonsEnAttenteWatcher() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bons_reception' }, checkPending)
       .subscribe()
 
+    // Filet de sécurité : si un évènement temps réel est manqué (websocket
+    // déconnecté momentanément, app revenue en avant-plan...), un sondage
+    // périodique garantit que l'alerte finit par s'afficher.
+    const interval = setInterval(checkPending, 30_000)
+
     return () => {
       cancelled = true
+      clearInterval(interval)
       supabase.removeChannel(channel)
     }
   }, [user])

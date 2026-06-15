@@ -6,7 +6,6 @@ import { useAppStore } from '../../stores/appStore'
 import { useAuth } from '../../hooks/useAuth'
 import { approuverBon, rejeterBon } from '../../lib/bons'
 import { validerReception, rejeterReception } from '../../lib/receptions'
-import { ConfirmModal } from '../modals/ConfirmModal'
 import { Modal } from '../ui/Modal'
 import { StockSwitcher } from './StockSwitcher'
 import type { BonReception, BonSortie, NotificationItem, NotificationType } from '../../types'
@@ -223,18 +222,13 @@ export function TopBar() {
   const removeNotification = useAppStore((s) => s.removeNotification)
   const { logout } = useAuth()
   const navigate = useNavigate()
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [loggingOut, setLoggingOut] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
 
   const nonLues = notifications.filter((n) => !n.lu).length
   const canValidate = user?.role === 'proprietaire' || user?.role === 'responsable'
 
   const handleLogout = async () => {
-    setLoggingOut(true)
     await logout()
-    setLoggingOut(false)
-    setConfirmOpen(false)
     navigate('/login', { replace: true })
   }
 
@@ -271,24 +265,12 @@ export function TopBar() {
         <button
           type="button"
           aria-label="Se déconnecter"
-          onClick={() => setConfirmOpen(true)}
+          onClick={handleLogout}
           className="flex h-8 w-8 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white"
         >
           <LogOut size={18} />
         </button>
       </div>
-
-      <ConfirmModal
-        open={confirmOpen}
-        title="Déconnexion"
-        message="Voulez-vous vous déconnecter ?"
-        confirmLabel="Se déconnecter"
-        cancelLabel="Annuler"
-        danger
-        loading={loggingOut}
-        onConfirm={handleLogout}
-        onCancel={() => setConfirmOpen(false)}
-      />
 
       <Modal isOpen={notifOpen} onClose={() => setNotifOpen(false)} title="Notifications">
         <div className="flex flex-col gap-2 pb-4">

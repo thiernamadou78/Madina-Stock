@@ -70,7 +70,5 @@ export function useBons() {
     }
   }, [depotActifId, refresh])
 
-  const enAttente = bons.filter((b) => b.statut === 'en_attente').length
-
-  return { bons, enAttente, loading, error, refresh }
+  return { bons, loading, error, refresh }
 }

@@ -2,8 +2,7 @@ import type { ComponentType } from 'react'
 import { Home, PackageMinus, PackagePlus, History, Package, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useAppStore } from '../../stores/appStore'
-import { useBons } from '../../hooks/useBons'
-import { useReceptions } from '../../hooks/useReceptions'
+import { useValidationsEnAttente } from '../../hooks/useValidationsEnAttente'
 
 interface NavItem {
   to: string
@@ -23,10 +22,9 @@ const BASE_ITEMS: NavItem[] = [
 
 export function BottomNav() {
   const role = useAppStore((s) => s.user?.role)
-  const { enAttente: enAttenteSortie } = useBons()
-  const { enAttente: enAttenteReception } = useReceptions()
+  const { bonsEnAttente, receptionsEnAttente } = useValidationsEnAttente()
 
-  const totalEnAttente = enAttenteSortie + enAttenteReception
+  const totalEnAttente = bonsEnAttente.length + receptionsEnAttente.length
 
   const items: NavItem[] =
     role === 'proprietaire'
