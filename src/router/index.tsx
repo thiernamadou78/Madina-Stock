@@ -3,6 +3,8 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAppStore } from '../stores/appStore'
+import { useBonsEnAttenteWatcher } from '../hooks/useBonsEnAttenteWatcher'
+import { useNotificationActionListener } from '../hooks/useNotificationActionListener'
 import { supabase } from '../lib/supabase'
 import { TopBar } from '../components/layout/TopBar'
 import { BottomNav } from '../components/ui/BottomNav'
@@ -21,6 +23,9 @@ import { UsersPage } from '../pages/UsersPage'
 import type { Role } from '../types'
 
 function AppLayout() {
+  useBonsEnAttenteWatcher()
+  useNotificationActionListener()
+
   return (
     <div className="min-h-[100dvh] bg-gray-50">
       <TopBar />

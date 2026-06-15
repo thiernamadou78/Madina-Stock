@@ -13,6 +13,7 @@ interface AppState {
   setDepots: (depots: Depot[]) => void
   setDepotActif: (depotId: string | null) => void
   addNotification: (notification: NotificationItem) => void
+  removeNotification: (id: string) => void
   marquerLu: (id: string) => void
   marquerTousLus: () => void
   reset: () => void
@@ -30,6 +31,8 @@ export const useAppStore = create<AppState>()(
       setDepotActif: (depotId) => set({ depotActifId: depotId }),
       addNotification: (notification) =>
         set((state) => ({ notifications: [notification, ...state.notifications].slice(0, MAX_NOTIFICATIONS) })),
+      removeNotification: (id) =>
+        set((state) => ({ notifications: state.notifications.filter((n) => n.id !== id) })),
       marquerLu: (id) =>
         set((state) => ({
           notifications: state.notifications.map((n) => (n.id === id ? { ...n, lu: true } : n)),

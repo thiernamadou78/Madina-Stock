@@ -3,10 +3,11 @@ import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
 import { notifier, MESSAGES } from '../lib/notifications'
 import { fetchAdmins, fetchUtilisateursByIds } from '../lib/bons'
-import { verifierSeuils } from '../lib/alertes'
+import { validerReception, rejeterReception } from '../lib/receptions'
+import type { LigneValidationInput } from '../lib/receptions'
 import type { BonReception, CanalAppro } from '../types'
 
-const RECEPTION_SELECT = `
+export const RECEPTION_SELECT = `
   id,
   numero,
   saisi_par,
@@ -43,12 +44,6 @@ interface NouvelleReceptionInput {
   canal: CanalAppro
   referenceDoc?: string
   lignes: NouvelleLigneReceptionInput[]
-}
-
-interface LigneValidationInput {
-  ligneId: string
-  valide: boolean
-  prixAchat: number | null
 }
 
 /**
@@ -170,7 +165,7 @@ export function useReceptions() {
       titre: '📥 Nouvelle réception',
       message: MESSAGES.receptionSoumise({ ...reception, valeur_totale: valeurTotale }),
       priorite: 'haute',
-      type: 'reception',
+      type: 'reception_soumise',
     })
 
     await refresh()
@@ -192,62 +187,11 @@ export function useReceptions() {
     const reception = receptions.find((r) => r.id === receptionId)
     if (!reception) return { error: 'Réception introuvable' }
 
-    if (statut === 'rejete') {
-      const { error: err } = await supabase
-        .from('bons_reception')
-        .update({
-          statut: 'rejete',
-          valide_par: user.id,
-          valide_le: new Date().toISOString(),
-        })
-        .eq('id', receptionId)
+    const { error } = statut === 'rejete'
+      ? await rejeterReception(reception, user.id)
+      : await validerReception(reception, user.id, lignes)
 
-      if (err) return { error: err.message }
-
-      if (reception.saisisseur) {
-        await notifier({
-          destinataires: [reception.saisisseur],
-          titre: '❌ Réception rejetée',
-          message: MESSAGES.receptionRejetee(reception),
-          canal: 'auto',
-          type: 'reception',
-        })
-      }
-
-      await refresh()
-      return { error: null }
-    }
-
-    const lignesAEnvoyer = lignes ?? reception.lignes.map((ligne) => ({
-      ligneId: ligne.id,
-      valide: ligne.valide,
-      prixAchat: ligne.prix_achat_unitaire ?? null,
-    }))
-
-    const { data: result, error: rpcErr } = await supabase.rpc('valider_reception', {
-      p_reception_id: receptionId,
-      p_validateur_id: user.id,
-      p_lignes: lignesAEnvoyer.map((l) => ({
-        ligne_id: l.ligneId,
-        valide: l.valide,
-        prix_achat: l.prixAchat,
-      })),
-    })
-
-    if (rpcErr) return { error: rpcErr.message }
-    if (!result?.success) return { error: result?.error ?? 'Erreur lors de la validation' }
-
-    if (reception.saisisseur) {
-      await notifier({
-        destinataires: [reception.saisisseur],
-        titre: '✅ Réception validée',
-        message: MESSAGES.receptionValidee(reception),
-        canal: 'auto',
-        type: 'reception',
-      })
-    }
-
-    await verifierSeuils(reception.depot_id, reception.lignes.map((l) => l.produit_id))
+    if (error) return { error }
 
     await refresh()
     return { error: null }

@@ -3,7 +3,7 @@ import { notifier, MESSAGES } from './notifications'
 import { verifierSeuils } from './alertes'
 import type { BonSortie, MotifSortie, StatutBon, Utilisateur } from '../types'
 
-const BON_SORTIE_SELECT = `
+export const BON_SORTIE_SELECT = `
   *,
   lignes:lignes_bon_sortie(*, produit:produits(*)),
   depot:depots!bons_sortie_depot_id_fkey(*),

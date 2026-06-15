@@ -28,8 +28,37 @@ self.addEventListener('push', (event) => {
 })
 
 self.addEventListener('notificationclick', (event) => {
+  const data = event.notification.data || {}
+
+  // Boutons "Valider" / "Rejeter" : on délègue l'action à une fenêtre
+  // ouverte de l'app (qui dispose des détails complets du bon/réception
+  // via useNotificationActionListener). Si aucune fenêtre n'est ouverte,
+  // on ouvre la page Validations pour que l'utilisateur agisse manuellement.
+  if (event.action === 'valider' || event.action === 'rejeter') {
+    event.notification.close()
+
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+        if (clientList.length === 0) {
+          if (clients.openWindow) {
+            return clients.openWindow(data.url || '/validations')
+          }
+          return
+        }
+
+        for (const client of clientList) {
+          client.postMessage({ type: 'notification-action', action: event.action, notifId: data.notifId })
+        }
+        if ('focus' in clientList[0]) {
+          return clientList[0].focus()
+        }
+      })
+    )
+    return
+  }
+
   event.notification.close()
-  const url = event.notification.data?.url || '/'
+  const url = data.url || '/'
 
   event.waitUntil(
     clients.matchAll({ type: 'window' }).then((clientList) => {

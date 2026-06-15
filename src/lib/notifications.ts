@@ -72,6 +72,16 @@ export async function demanderPermissionPush(): Promise<boolean> {
 }
 
 /**
+ * Bouton d'action affiché sur une notification (non disponible dans
+ * lib.dom.d.ts — voir https://developer.mozilla.org/docs/Web/API/Notification/actions).
+ */
+export interface NotificationAction {
+  action: string
+  title: string
+  icon?: string
+}
+
+/**
  * Affiche une notification Push locale via le service worker de la PWA.
  * Utilise `registration.showNotification()` (plutôt que `new Notification()`)
  * afin que la notification puisse s'afficher même lorsque l'app est en
@@ -80,14 +90,15 @@ export async function demanderPermissionPush(): Promise<boolean> {
 export async function envoyerPushLocal(
   titre: string,
   corps: string,
-  data?: { url?: string; bonId?: string; type?: string; tag?: string }
+  data?: { url?: string; bonId?: string; notifId?: string; type?: string; tag?: string },
+  actions?: NotificationAction[]
 ): Promise<void> {
   if (Notification.permission !== 'granted') {
     const perm = await Notification.requestPermission()
     if (perm !== 'granted') return
   }
 
-  const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
+  const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean; actions?: NotificationAction[] } = {
     body: corps,
     icon: '/pwa-192x192.svg',
     badge: '/pwa-192x192.svg',
@@ -99,6 +110,10 @@ export async function envoyerPushLocal(
   }
 
   if ('serviceWorker' in navigator) {
+    // Les boutons d'action ne sont disponibles que via le Service Worker.
+    if (actions && actions.length > 0) {
+      options.actions = actions
+    }
     const registration = await navigator.serviceWorker.ready
     await registration.showNotification(titre, options)
     return
@@ -179,13 +194,19 @@ export async function notifier(params: {
 }): Promise<void> {
   const canal = params.canal ?? 'auto'
 
+  // 'bon_soumis' / 'reception_soumise' sont gérées exclusivement par
+  // useBonsEnAttenteWatcher, qui les enrichit avec le bon/la réception
+  // complet (tous dépôts confondus) pour permettre Valider/Rejeter
+  // directement depuis la notification — éviter un doublon ici.
+  const gereParWatcher = params.type === 'bon_soumis' || params.type === 'reception_soumise'
+
   const currentUserId = useAppStore.getState().user?.id
-  if (currentUserId && params.destinataires.some((d) => d.id === currentUserId)) {
+  if (!gereParWatcher && currentUserId && params.destinataires.some((d) => d.id === currentUserId)) {
     useAppStore.getState().addNotification({
       id: crypto.randomUUID(),
       titre: params.titre,
       message: params.message,
-      type: params.type ?? 'bon_soumis',
+      type: params.type ?? 'bon_approuve',
       lu: false,
       created_at: new Date().toISOString(),
     })

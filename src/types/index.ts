@@ -111,6 +111,7 @@ export type NotificationType =
   | 'bon_soumis'
   | 'bon_approuve'
   | 'bon_rejete'
+  | 'reception_soumise'
   | 'reception'
   | 'alerte'
   | 'alerte_levee'
@@ -122,4 +123,9 @@ export interface NotificationItem {
   type: NotificationType
   lu: boolean
   created_at: string
+  // Présents uniquement pour 'bon_soumis' / 'reception_soumise' : permettent
+  // d'afficher tous les détails et d'agir (Valider/Rejeter) directement
+  // depuis la notification, sans naviguer, quel que soit le dépôt actif.
+  bonSortie?: BonSortie
+  bonReception?: BonReception
 }
