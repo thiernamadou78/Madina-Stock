@@ -22,7 +22,6 @@ export function useBonsEnAttenteWatcher() {
     if (user.role !== 'proprietaire' && user.role !== 'responsable') return
 
     let cancelled = false
-    let premierPassage = true
 
     const checkPending = async () => {
       const [sortieRes, receptionRes] = await Promise.all([
@@ -84,17 +83,15 @@ export function useBonsEnAttenteWatcher() {
           bonSortie: enrichi,
         })
 
-        if (!premierPassage) {
-          void envoyerPushLocal(
-            '📦 Bon à valider',
-            MESSAGES.bonSoumis(enrichi),
-            { url: '/validations', bonId: bon.id, notifId, type: 'bon_soumis', tag: `madina-bon-${bon.id}` },
-            [
-              { action: 'valider', title: '✅ Valider' },
-              { action: 'rejeter', title: '❌ Rejeter' },
-            ]
-          )
-        }
+        void envoyerPushLocal(
+          '📦 Bon à valider',
+          MESSAGES.bonSoumis(enrichi),
+          { url: '/validations', bonId: bon.id, notifId, type: 'bon_soumis', tag: `madina-bon-${bon.id}` },
+          [
+            { action: 'valider', title: '✅ Valider' },
+            { action: 'rejeter', title: '❌ Rejeter' },
+          ]
+        )
       }
 
       for (const r of receptions) {
@@ -113,20 +110,16 @@ export function useBonsEnAttenteWatcher() {
           bonReception: enrichi,
         })
 
-        if (!premierPassage) {
-          void envoyerPushLocal(
-            '📥 Réception à valider',
-            MESSAGES.receptionSoumise(enrichi),
-            { url: '/validations', bonId: r.id, notifId, type: 'reception_soumise', tag: `madina-reception-${r.id}` },
-            [
-              { action: 'valider', title: '✅ Valider' },
-              { action: 'rejeter', title: '❌ Rejeter' },
-            ]
-          )
-        }
+        void envoyerPushLocal(
+          '📥 Réception à valider',
+          MESSAGES.receptionSoumise(enrichi),
+          { url: '/validations', bonId: r.id, notifId, type: 'reception_soumise', tag: `madina-reception-${r.id}` },
+          [
+            { action: 'valider', title: '✅ Valider' },
+            { action: 'rejeter', title: '❌ Rejeter' },
+          ]
+        )
       }
-
-      premierPassage = false
     }
 
     checkPending()
