@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Building2, Check, KeyRound, Pencil, Plus, Power } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAppStore } from '../stores/appStore'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { normaliserTelephone } from '../lib/utils'
@@ -65,6 +66,7 @@ function avatarColor(id: string): string {
 }
 
 export function UsersPage() {
+  const user = useAppStore((s) => s.user)
   const [gestionnaires, setGestionnaires] = useState<GestionnaireRow[]>([])
   const [depots, setDepots] = useState<Depot[]>([])
   const [loading, setLoading] = useState(true)
@@ -88,13 +90,16 @@ export function UsersPage() {
     setLoading(true)
     setError(null)
 
+    const entrepriseId = user?.entreprise_id ?? ''
+
     const [usersRes, depotsRes, liaisonsRes] = await Promise.all([
       supabase
         .from('utilisateurs')
         .select('id, nom, role, contact_wa, actif, all_depots')
         .in('role', ['gestionnaire', 'responsable'])
+        .eq('entreprise_id', entrepriseId)
         .order('nom'),
-      supabase.from('depots').select('*').eq('actif', true).order('nom'),
+      supabase.from('depots').select('*').eq('actif', true).eq('entreprise_id', entrepriseId).order('nom'),
       supabase.from('utilisateurs_depots').select('utilisateur_id, depot_id'),
     ])
 
@@ -122,7 +127,7 @@ export function UsersPage() {
     setGestionnaires(rows)
     setDepots((depotsRes.data ?? []) as Depot[])
     setLoading(false)
-  }, [])
+  }, [user?.entreprise_id])
 
   useEffect(() => {
     refresh()
@@ -199,6 +204,7 @@ export function UsersPage() {
           p_role: form.role,
           p_depot_ids: form.depotIds,
           p_all_depots: form.allDepots,
+          p_entreprise_id: user?.entreprise_id ?? null,
         })
 
     setSaving(false)
@@ -240,6 +246,7 @@ export function UsersPage() {
       p_nom: depotForm.nom.trim(),
       p_type: depotForm.type,
       p_localisation: depotForm.localisation.trim() || null,
+      p_entreprise_id: user?.entreprise_id ?? null,
     })
     setSaving(false)
 

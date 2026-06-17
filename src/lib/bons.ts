@@ -10,12 +10,13 @@ export const BON_SORTIE_SELECT = `
   depot_destination:depots!bons_sortie_depot_destination_id_fkey(*)
 `
 
-export async function fetchAdmins(roles: string[]): Promise<Utilisateur[]> {
+export async function fetchAdmins(roles: string[], entrepriseId?: string): Promise<Utilisateur[]> {
   const { data } = await supabase
     .from('utilisateurs')
     .select('id, nom, role, contact_wa, actif')
     .in('role', roles)
     .eq('actif', true)
+    .eq('entreprise_id', entrepriseId ?? '')
 
   return (data ?? []) as unknown as Utilisateur[]
 }
@@ -51,17 +52,13 @@ async function fetchBonSortie(bonId: string): Promise<BonSortie | null> {
   return { ...bon, gestionnaire: utilisateurs.get(bon.gestionnaire_id) }
 }
 
-/**
- * Crée un bon de sortie avec ses lignes, en réservant le stock demandé.
- * La vérification de disponibilité et la réservation (qte_reservee) sont
- * effectuées atomiquement côté base via la fonction RPC `creer_bon_sortie`.
- */
 export async function creerBonSortie(data: {
   depotId: string
   gestionnairId: string
   motif: MotifSortie
   depotDestinationId?: string
   lignes: Array<{ produitId: string; qteDemandee: number }>
+  entrepriseId?: string
 }): Promise<{ success: boolean; error?: string; bon?: BonSortie }> {
   if (data.lignes.length === 0) {
     return { success: false, error: 'Le bon doit contenir au moins une ligne' }
@@ -96,7 +93,7 @@ export async function creerBonSortie(data: {
     return { success: false, error: 'Bon créé mais impossible de le récupérer' }
   }
 
-  const admins = await fetchAdmins(['proprietaire', 'responsable'])
+  const admins = await fetchAdmins(['proprietaire', 'responsable'], data.entrepriseId)
   await notifier({
     destinataires: admins,
     titre: '📦 Nouveau bon',
@@ -108,18 +105,13 @@ export async function creerBonSortie(data: {
   return { success: true, bon }
 }
 
-/**
- * Sortie directe (propriétaire) : débite immédiatement le stock disponible
- * et crée un bon déjà au statut "approuve", sans passer par la file de
- * validation. La vérification de disponibilité et le débit sont effectués
- * atomiquement côté base via la fonction RPC `sortie_directe`.
- */
 export async function sortieDirecte(data: {
   depotId: string
   gestionnairId: string
   motif: MotifSortie
   depotDestinationId?: string
   lignes: Array<{ produitId: string; qteDemandee: number }>
+  entrepriseId?: string
 }): Promise<{ success: boolean; error?: string; bon?: { numero: string; statut: StatutBon } }> {
   if (data.lignes.length === 0) {
     return { success: false, error: 'Le bon doit contenir au moins une ligne' }
@@ -154,12 +146,6 @@ export async function sortieDirecte(data: {
   return { success: true, bon: { numero: result.numero as string, statut: 'approuve' } }
 }
 
-/**
- * Approuve un bon de sortie : fixe les quantités accordées (par défaut la
- * quantité demandée), décrémente le stock disponible et libère la réservation,
- * puis passe le bon au statut "approuve". Notifie le gestionnaire et vérifie
- * les seuils de stock du dépôt.
- */
 export async function approuverBon(
   bonId: string,
   validateurId: string,
@@ -213,10 +199,6 @@ export async function approuverBon(
   return { success: true, bon }
 }
 
-/**
- * Rejette un bon de sortie en attente : libère la réservation de stock
- * (qte_reservee) et notifie le gestionnaire.
- */
 export async function rejeterBon(
   bonId: string,
   validateurId: string

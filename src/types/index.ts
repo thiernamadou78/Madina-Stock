@@ -2,11 +2,27 @@
 // MadinaStock — Types TypeScript correspondant au schéma DB
 // ============================================================
 
-export type Role = 'gestionnaire' | 'responsable' | 'admin' | 'proprietaire'
+export type Role = 'gestionnaire' | 'responsable' | 'admin' | 'proprietaire' | 'superadmin'
 export type MotifSortie = 'vente' | 'transfert' | 'perte' | 'retour'
 export type StatutBon = 'en_attente' | 'approuve' | 'rejete' | 'expire'
 export type CanalAppro = 'presentiel' | 'appel' | 'app_mobile' | 'conteneur'
 export type TypeAlerte = 'alerte' | 'critique' | 'rupture' | 'levee'
+export type StatutEntreprise = 'actif' | 'suspendu' | 'essai' | 'supprime'
+
+export interface Entreprise {
+  id: string
+  nom: string
+  code: string
+  statut: StatutEntreprise
+  date_expiration?: string
+  contact_nom?: string
+  contact_tel?: string
+  contact_email?: string
+  adresse?: string
+  logo_url?: string
+  created_at: string
+  updated_at: string
+}
 
 export interface Utilisateur {
   id: string
@@ -16,6 +32,7 @@ export interface Utilisateur {
   actif: boolean
   all_depots?: boolean
   pin_change_required?: boolean
+  entreprise_id?: string
 }
 
 export interface Depot {
@@ -24,6 +41,7 @@ export interface Depot {
   type: 'principal' | 'secondaire'
   localisation?: string
   actif: boolean
+  entreprise_id?: string
 }
 
 export interface Produit {
@@ -33,6 +51,7 @@ export interface Produit {
   categorie: string
   unite: string
   actif: boolean
+  entreprise_id?: string
 }
 
 export interface StockProduit {
@@ -48,6 +67,7 @@ export interface StockProduit {
   seuil_critique: number
   prix_achat_dernier?: number
   statut_stock: 'ok' | 'alerte' | 'critique' | 'rupture' // calculé
+  entreprise_id?: string
 }
 
 export interface LigneBonSortie {
@@ -76,6 +96,7 @@ export interface BonSortie {
   expire_le: string
   lignes: LigneBonSortie[]
   created_at: string
+  entreprise_id?: string
 }
 
 export interface LigneReception {
@@ -105,6 +126,7 @@ export interface BonReception {
   valeur_totale?: number
   lignes: LigneReception[]
   created_at: string
+  entreprise_id?: string
 }
 
 export type NotificationType =
@@ -123,9 +145,6 @@ export interface NotificationItem {
   type: NotificationType
   lu: boolean
   created_at: string
-  // Présents uniquement pour 'bon_soumis' / 'reception_soumise' : permettent
-  // d'afficher tous les détails et d'agir (Valider/Rejeter) directement
-  // depuis la notification, sans naviguer, quel que soit le dépôt actif.
   bonSortie?: BonSortie
   bonReception?: BonReception
 }

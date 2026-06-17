@@ -81,6 +81,7 @@ export function NouvelleSortiePage() {
       motif,
       depotDestinationId: motif === 'transfert' ? depotDestinationId : undefined,
       lignes: [{ produitId, qteDemandee: quantite }],
+      entrepriseId: user.entreprise_id,
     }
 
     const result = isProprietaire ? await sortieDirecte(params) : await creerBonSortie(params)

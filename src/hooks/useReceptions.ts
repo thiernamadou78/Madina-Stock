@@ -19,6 +19,7 @@ export const RECEPTION_SELECT = `
   valeur_totale,
   created_at,
   updated_at,
+  entreprise_id,
   depot:depots(id, nom, type),
   lignes:lignes_reception(
     id,
@@ -44,9 +45,6 @@ interface NouvelleReceptionInput {
   lignes: NouvelleLigneReceptionInput[]
 }
 
-/**
- * Charge et gère les bons de réception du dépôt actif.
- */
 export function useReceptions() {
   const depotActifId = useAppStore((s) => s.depotActifId)
   const user = useAppStore((s) => s.user)
@@ -68,6 +66,7 @@ export function useReceptions() {
       .from('bons_reception')
       .select(RECEPTION_SELECT)
       .eq('depot_id', depotActifId)
+      .eq('entreprise_id', user?.entreprise_id ?? '')
       .order('created_at', { ascending: false })
 
     if (err) {
@@ -82,7 +81,7 @@ export function useReceptions() {
 
     setReceptions(recus.map((r) => ({ ...r, saisisseur: utilisateurs.get(r.saisi_par) })))
     setLoading(false)
-  }, [depotActifId])
+  }, [depotActifId, user?.entreprise_id])
 
   useEffect(() => {
     refresh()
@@ -105,10 +104,6 @@ export function useReceptions() {
     }
   }, [depotActifId, refresh])
 
-  /**
-   * Crée un nouveau bon de réception avec ses lignes, en statut "en_attente",
-   * puis notifie les propriétaires/responsables.
-   */
   const creerReception = useCallback(async (
     data: NouvelleReceptionInput
   ): Promise<{ success: boolean; numero?: string; error?: string }> => {
@@ -127,6 +122,7 @@ export function useReceptions() {
         fournisseur: data.fournisseur,
         canal: data.canal,
         reference_doc: data.referenceDoc ?? null,
+        entreprise_id: user.entreprise_id ?? null,
       })
       .select(RECEPTION_SELECT)
       .single()
@@ -157,7 +153,7 @@ export function useReceptions() {
 
     await supabase.from('bons_reception').update({ valeur_totale: valeurTotale }).eq('id', reception.id)
 
-    const admins = await fetchAdmins(['proprietaire', 'responsable'])
+    const admins = await fetchAdmins(['proprietaire', 'responsable'], user.entreprise_id)
     await notifier({
       destinataires: admins,
       titre: '📥 Nouvelle réception',

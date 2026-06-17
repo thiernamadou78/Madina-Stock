@@ -20,11 +20,9 @@ export function enrichirStock(stock: StockProduit): StockProduit {
   }
 }
 
-/**
- * Charge le stock du dépôt actuellement actif (sélectionné dans appStore).
- */
 export function useStock() {
   const depotActifId = useAppStore((s) => s.depotActifId)
+  const entrepriseId = useAppStore((s) => s.user?.entreprise_id)
   const [stock, setStock] = useState<StockProduit[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +41,7 @@ export function useStock() {
       .from('stock_produits')
       .select('*, produit:produits(*)')
       .eq('depot_id', depotActifId)
+      .eq('entreprise_id', entrepriseId ?? '')
       .order('created_at', { ascending: true })
 
     if (err) {
@@ -52,7 +51,7 @@ export function useStock() {
     }
 
     setLoading(false)
-  }, [depotActifId])
+  }, [depotActifId, entrepriseId])
 
   useEffect(() => {
     refresh()

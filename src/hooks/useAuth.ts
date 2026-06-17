@@ -10,56 +10,48 @@ interface LoginResult {
 }
 
 /**
- * Liste les utilisateurs actifs, pour la sélection à l'écran de connexion.
+ * Liste les utilisateurs actifs pour la sélection à l'écran de connexion.
+ * Exclut le superadmin qui dispose de son propre écran de connexion.
  */
 export async function listerUtilisateurs(): Promise<Utilisateur[]> {
   const { data, error } = await supabase
     .from('utilisateurs')
     .select('id, nom, role, contact_wa, actif')
     .eq('actif', true)
+    .neq('role', 'superadmin')
     .order('nom')
 
   if (error) throw error
   return (data ?? []) as unknown as Utilisateur[]
 }
 
-async function fetchAllDepotsFlag(userId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('utilisateurs')
-    .select('all_depots')
-    .eq('id', userId)
-    .single()
-
-  return (data as { all_depots?: boolean } | null)?.all_depots ?? false
-}
-
 /**
- * Charge la liste des dépôts accessibles à un utilisateur selon son rôle.
- * Le/la propriétaire et l'admin voient toujours TOUS les dépôts actifs,
- * quelles que soient les assignations dans utilisateurs_depots.
+ * Charge la liste des dépôts accessibles à un utilisateur selon son rôle,
+ * filtrés par entreprise_id pour l'isolation multi-tenant.
  */
 async function chargerDepots(user: Utilisateur): Promise<Depot[]> {
-  // Proprietaire et admin voient toujours tous les dépôts
+  const entrepriseId = user.entreprise_id
+
   if (user.role === 'proprietaire' || user.role === 'admin') {
     const { data } = await supabase
       .from('depots')
       .select('*')
       .eq('actif', true)
+      .eq('entreprise_id', entrepriseId ?? '')
       .order('nom')
     return (data ?? []) as unknown as Depot[]
   }
 
-  // Gestionnaire avec le flag all_depots voit tous les dépôts
   if (user.all_depots) {
     const { data } = await supabase
       .from('depots')
       .select('*')
       .eq('actif', true)
+      .eq('entreprise_id', entrepriseId ?? '')
       .order('nom')
     return (data ?? []) as unknown as Depot[]
   }
 
-  // Les autres utilisateurs ne voient que les dépôts assignés
   const { data } = await supabase
     .from('utilisateurs_depots')
     .select('depot:depots(id, nom, type, localisation, actif)')
@@ -87,35 +79,34 @@ export function useAuth() {
     nom: string
     role: string
     contact_wa: string | null
+    entreprise_id?: string | null
+    all_depots?: boolean | null
+    pin_change_required?: boolean | null
   }): Promise<LoginResult> => {
-    const allDepots = await fetchAllDepotsFlag(row.id)
     const utilisateur: Utilisateur = {
       id: row.id,
       nom: row.nom,
       role: row.role as Role,
       contact_wa: row.contact_wa ?? undefined,
       actif: true,
-      all_depots: allDepots,
+      all_depots: row.all_depots ?? false,
+      entreprise_id: row.entreprise_id ?? undefined,
+      pin_change_required: row.pin_change_required ?? undefined,
     }
 
     setAttempts(0)
     setUser(utilisateur)
 
-    const depotsUtilisateur = await chargerDepots(utilisateur)
-    setDepots(depotsUtilisateur)
-
-    // Demande la permission de notification dès la connexion, sans attendre
-    // une navigation, pour que les push fonctionnent même app fermée.
-    void demanderPermissionPush()
+    // Le superadmin n'a pas de dépôts
+    if (utilisateur.role !== 'superadmin') {
+      const depotsUtilisateur = await chargerDepots(utilisateur)
+      setDepots(depotsUtilisateur)
+      void demanderPermissionPush()
+    }
 
     return { user: utilisateur, error: null }
   }, [setUser, setDepots])
 
-  /**
-   * Connexion propriétaire par nom + code PIN.
-   * La vérification du hash bcrypt est déléguée à une fonction RPC
-   * Supabase (`verify_pin`) afin de ne jamais exposer le hash au client.
-   */
   const login = useCallback(async (nom: string, codePin: string): Promise<LoginResult> => {
     setLoading(true)
     try {
@@ -124,20 +115,34 @@ export function useAuth() {
         p_pin: codePin,
       })
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        setAttempts((a) => a + 1)
+        if (error.message?.includes('COMPTE_SUSPENDU')) {
+          return { user: null, error: 'Ce compte est suspendu. Contactez l\'administrateur.' }
+        }
+        if (error.message?.includes('COMPTE_EXPIRE')) {
+          return { user: null, error: 'Votre abonnement a expiré. Contactez MadinaStock.' }
+        }
+        if (error.message?.includes('COMPTE_SUPPRIME')) {
+          return { user: null, error: 'Ce compte a été supprimé.' }
+        }
+        return { user: null, error: 'Code PIN incorrect' }
+      }
+
+      if (!data || data.length === 0) {
         setAttempts((a) => a + 1)
         return { user: null, error: 'Code PIN incorrect' }
       }
 
-      return await finalizeLogin(data[0] as { id: string; nom: string; role: string; contact_wa: string | null })
+      return await finalizeLogin(data[0] as {
+        id: string; nom: string; role: string; contact_wa: string | null
+        entreprise_id: string | null; all_depots: boolean | null; pin_change_required: boolean | null
+      })
     } finally {
       setLoading(false)
     }
   }, [finalizeLogin])
 
-  /**
-   * Connexion gestionnaire par numéro de téléphone (contact_wa) + code PIN.
-   */
   const loginTel = useCallback(async (tel: string, codePin: string): Promise<LoginResult> => {
     setLoading(true)
     try {
@@ -146,33 +151,37 @@ export function useAuth() {
         p_pin: codePin,
       })
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        setAttempts((a) => a + 1)
+        if (error.message?.includes('COMPTE_SUSPENDU')) {
+          return { user: null, error: 'Ce compte est suspendu. Contactez l\'administrateur.' }
+        }
+        if (error.message?.includes('COMPTE_EXPIRE')) {
+          return { user: null, error: 'Votre abonnement a expiré. Contactez MadinaStock.' }
+        }
+        return { user: null, error: 'Téléphone ou code PIN incorrect' }
+      }
+
+      if (!data || data.length === 0) {
         setAttempts((a) => a + 1)
         return { user: null, error: 'Téléphone ou code PIN incorrect' }
       }
 
-      return await finalizeLogin(data[0] as { id: string; nom: string; role: string; contact_wa: string | null })
+      return await finalizeLogin(data[0] as {
+        id: string; nom: string; role: string; contact_wa: string | null
+        entreprise_id: string | null; all_depots: boolean | null; pin_change_required: boolean | null
+      })
     } finally {
       setLoading(false)
     }
   }, [finalizeLogin])
 
-  /**
-   * Ouvre une session de gestionnaire pour le dépôt sélectionné.
-   */
   const ouvrirSession = useCallback(async (depotId: string) => {
     if (!user) return
-
     setDepotActif(depotId)
-
-    await supabase
-      .from('sessions_gestionnaire')
-      .insert({ user_id: user.id, depot_id: depotId })
+    await supabase.from('sessions_gestionnaire').insert({ user_id: user.id, depot_id: depotId })
   }, [user, setDepotActif])
 
-  /**
-   * Ferme la session de gestionnaire en cours et déconnecte l'utilisateur.
-   */
   const logout = useCallback(async () => {
     if (user) {
       await supabase

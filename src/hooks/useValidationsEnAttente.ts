@@ -10,6 +10,7 @@ import type { BonReception, BonSortie } from '../types'
  * l'ensemble des dépôts accessibles à l'utilisateur (et non uniquement le
  * dépôt actif), afin que le propriétaire/responsable puisse voir les
  * détails et valider/rejeter une demande quel que soit son dépôt actif.
+ * Filtrés par entreprise_id pour l'isolation multi-tenant.
  */
 export function useValidationsEnAttente() {
   const user = useAppStore((s) => s.user)
@@ -20,6 +21,7 @@ export function useValidationsEnAttente() {
   const channelIdRef = useRef(Math.random().toString(36).slice(2))
 
   const depotIds = depots.map((d) => d.id)
+  const entrepriseId = user?.entreprise_id
 
   const refresh = useCallback(async () => {
     if (depotIds.length === 0) {
@@ -36,12 +38,14 @@ export function useValidationsEnAttente() {
         .select(BON_SORTIE_SELECT)
         .eq('statut', 'en_attente')
         .in('depot_id', depotIds)
+        .eq('entreprise_id', entrepriseId ?? '')
         .order('created_at', { ascending: false }),
       supabase
         .from('bons_reception')
         .select(RECEPTION_SELECT)
         .eq('statut', 'en_attente')
         .in('depot_id', depotIds)
+        .eq('entreprise_id', entrepriseId ?? '')
         .order('created_at', { ascending: false }),
     ])
 
@@ -57,7 +61,7 @@ export function useValidationsEnAttente() {
     setReceptionsEnAttente(receptions.map((r) => ({ ...r, saisisseur: utilisateurs.get(r.saisi_par) })))
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [depotIds.join(',')])
+  }, [depotIds.join(','), entrepriseId])
 
   useEffect(() => {
     if (!user) return
@@ -73,10 +77,7 @@ export function useValidationsEnAttente() {
 
     const interval = setInterval(refresh, 30_000)
 
-    return () => {
-      clearInterval(interval)
-      supabase.removeChannel(channel)
-    }
+    return () => { clearInterval(interval); supabase.removeChannel(channel) }
   }, [user, refresh])
 
   return { bonsEnAttente, receptionsEnAttente, loading, refresh }

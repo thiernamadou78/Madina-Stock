@@ -20,6 +20,11 @@ import { DashboardPage } from '../pages/DashboardPage'
 import { ProduitsPage } from '../pages/ProduitsPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { UsersPage } from '../pages/UsersPage'
+import { SuperAdminLoginPage } from '../pages/SuperAdminLoginPage'
+import { SuperAdminLayout } from '../pages/superadmin/SuperAdminLayout'
+import { SuperAdminEntreprisesPage } from '../pages/superadmin/SuperAdminEntreprisesPage'
+import { SuperAdminVueGlobalePage } from '../pages/superadmin/SuperAdminVueGlobalePage'
+import { SuperAdminEntrepriseDetailPage } from '../pages/superadmin/SuperAdminEntrepriseDetailPage'
 import type { Role } from '../types'
 
 function AppLayout() {
@@ -39,11 +44,22 @@ function AppLayout() {
 
 function ProtectedRoute() {
   const { isAuthenticated, depotActifId } = useAuth()
+  const role = useAppStore((s) => s.user?.role)
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (role === 'superadmin') return <Navigate to="/superadmin" replace />
   if (!depotActifId) return <Navigate to="/select-depot" replace />
 
   return <AppLayout />
+}
+
+function SuperAdminRoute() {
+  const { isAuthenticated } = useAuth()
+  const role = useAppStore((s) => s.user?.role)
+
+  if (!isAuthenticated || role !== 'superadmin') return <Navigate to="/superadmin-login" replace />
+
+  return <SuperAdminLayout />
 }
 
 function RoleRoute({ roles }: { roles: Role[] }) {
@@ -56,19 +72,42 @@ function RoleRoute({ roles }: { roles: Role[] }) {
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth()
+  const role = useAppStore((s) => s.user?.role)
+
+  const loginRedirect = isAuthenticated
+    ? (role === 'superadmin' ? <Navigate to="/superadmin" replace /> : <Navigate to="/select-depot" replace />)
+    : <LoginPage />
 
   return (
     <Routes>
       <Route path="/onboarding" element={<Navigate to="/login" replace />} />
-      <Route
-        path="/login"
-        element={isAuthenticated ? <Navigate to="/select-depot" replace /> : <LoginPage />}
-      />
+      <Route path="/login" element={loginRedirect} />
       <Route
         path="/select-depot"
-        element={isAuthenticated ? <SelectDepotPage /> : <Navigate to="/login" replace />}
+        element={
+          !isAuthenticated ? <Navigate to="/login" replace />
+            : role === 'superadmin' ? <Navigate to="/superadmin" replace />
+            : <SelectDepotPage />
+        }
       />
 
+      {/* SuperAdmin */}
+      <Route
+        path="/superadmin-login"
+        element={
+          isAuthenticated && role === 'superadmin'
+            ? <Navigate to="/superadmin" replace />
+            : <SuperAdminLoginPage />
+        }
+      />
+      <Route path="/superadmin" element={<SuperAdminRoute />}>
+        <Route index element={<Navigate to="entreprises" replace />} />
+        <Route path="entreprises" element={<SuperAdminEntreprisesPage />} />
+        <Route path="entreprises/:id" element={<SuperAdminEntrepriseDetailPage />} />
+        <Route path="vue-globale" element={<SuperAdminVueGlobalePage />} />
+      </Route>
+
+      {/* App normale */}
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/sortie" element={<NouvelleSortiePage />} />

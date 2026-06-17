@@ -13,6 +13,7 @@ import type { BonReception, BonSortie } from '../types'
  * (lignes, dépôt, demandeur...) afin de permettre Valider/Rejeter
  * directement depuis la notification — quel que soit le dépôt actif
  * sur cet appareil.
+ * Filtrés par entreprise_id pour l'isolation multi-tenant.
  */
 export function useBonsEnAttenteWatcher() {
   const user = useAppStore((s) => s.user)
@@ -22,18 +23,16 @@ export function useBonsEnAttenteWatcher() {
     if (user.role !== 'proprietaire' && user.role !== 'responsable') return
 
     let cancelled = false
+    const entrepriseId = user.entreprise_id
 
     const checkPending = async () => {
+      const baseQuery = supabase.from('bons_sortie').select(BON_SORTIE_SELECT).eq('statut', 'en_attente')
+      const baseReceptionQuery = supabase.from('bons_reception').select(RECEPTION_SELECT).eq('statut', 'en_attente')
+
       const [sortieRes, receptionRes] = await Promise.all([
-        supabase
-          .from('bons_sortie')
-          .select(BON_SORTIE_SELECT)
-          .eq('statut', 'en_attente')
+        (entrepriseId ? baseQuery.eq('entreprise_id', entrepriseId) : baseQuery)
           .order('created_at', { ascending: false }),
-        supabase
-          .from('bons_reception')
-          .select(RECEPTION_SELECT)
-          .eq('statut', 'en_attente')
+        (entrepriseId ? baseReceptionQuery.eq('entreprise_id', entrepriseId) : baseReceptionQuery)
           .order('created_at', { ascending: false }),
       ])
 
@@ -45,8 +44,6 @@ export function useBonsEnAttenteWatcher() {
       const sortieIds = new Set(sorties.map((b) => b.id))
       const receptionIds = new Set(receptions.map((r) => r.id))
 
-      // Nettoie les notifications dont le bon a déjà été traité (depuis
-      // un autre appareil ou la page Validations).
       for (const n of useAppStore.getState().notifications) {
         if (n.bonSortie && !sortieIds.has(n.bonSortie.id)) {
           useAppStore.getState().removeNotification(n.id)
@@ -130,9 +127,6 @@ export function useBonsEnAttenteWatcher() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bons_reception' }, checkPending)
       .subscribe()
 
-    // Filet de sécurité : si un évènement temps réel est manqué (websocket
-    // déconnecté momentanément, app revenue en avant-plan...), un sondage
-    // périodique garantit que l'alerte finit par s'afficher.
     const interval = setInterval(checkPending, 30_000)
 
     return () => {

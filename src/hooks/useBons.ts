@@ -11,11 +11,9 @@ const BON_SELECT = `
   depot_destination:depots!bons_sortie_depot_destination_id_fkey(*)
 `
 
-/**
- * Charge et gère les bons de sortie du dépôt actif.
- */
 export function useBons() {
   const depotActifId = useAppStore((s) => s.depotActifId)
+  const entrepriseId = useAppStore((s) => s.user?.entreprise_id)
   const [bons, setBons] = useState<BonSortie[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +32,7 @@ export function useBons() {
       .from('bons_sortie')
       .select(BON_SELECT)
       .eq('depot_id', depotActifId)
+      .eq('entreprise_id', entrepriseId ?? '')
       .order('created_at', { ascending: false })
 
     if (err) {
@@ -47,7 +46,7 @@ export function useBons() {
 
     setBons(bons.map((b) => ({ ...b, gestionnaire: utilisateurs.get(b.gestionnaire_id) })))
     setLoading(false)
-  }, [depotActifId])
+  }, [depotActifId, entrepriseId])
 
   useEffect(() => {
     refresh()
