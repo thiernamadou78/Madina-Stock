@@ -4,6 +4,10 @@
 -- (suspendu / supprimé / expiré).
 -- ============================================================
 
+-- DROP requis car la signature de retour change (nouveaux OUT params)
+DROP FUNCTION IF EXISTS verify_pin(TEXT, TEXT);
+DROP FUNCTION IF EXISTS verify_pin_tel(TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION verify_pin(p_nom TEXT, p_pin TEXT)
 RETURNS TABLE(
   id UUID, nom TEXT, role TEXT, contact_wa TEXT,
