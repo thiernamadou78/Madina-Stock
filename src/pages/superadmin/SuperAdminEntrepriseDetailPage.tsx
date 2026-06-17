@@ -136,6 +136,13 @@ export function SuperAdminEntrepriseDetailPage() {
   const [bonsActivite, setBonsActivite] = useState<BonActivite[]>([])
   const [loadingPage, setLoadingPage] = useState(true)
 
+  // Onboarding — étape 0 : propriétaire
+  const [proprietaireExistant, setProprietaireExistant] = useState<{ nom: string } | null | false>(null)
+  const [propForm, setPropForm] = useState({ prenom: '', nom: '', tel: '', pin: '' })
+  const [propSaving, setPropSaving] = useState(false)
+  const [propError, setPropError] = useState<string | null>(null)
+  const [propCree, setPropCree] = useState<{ nom: string; pin: string } | null>(null)
+
   // Onboarding state
   const [step1Done, setStep1Done] = useState(false)
   const [parsing1, setParsing1] = useState(false)
@@ -213,7 +220,17 @@ export function SuperAdminEntrepriseDetailPage() {
   useEffect(() => {
     if (tab === 'utilisateurs') loadUtilisateurs()
     if (tab === 'activite') loadActivite()
-  }, [tab, loadUtilisateurs, loadActivite])
+    if (tab === 'onboarding' && id && proprietaireExistant === null) {
+      supabase
+        .from('utilisateurs')
+        .select('nom')
+        .eq('entreprise_id', id)
+        .eq('role', 'proprietaire')
+        .eq('actif', true)
+        .maybeSingle()
+        .then(({ data }) => setProprietaireExistant(data ? { nom: (data as { nom: string }).nom } : false))
+    }
+  }, [tab, loadUtilisateurs, loadActivite, id, proprietaireExistant])
 
   // Charger les dépôts existants quand step1 est terminé (pour le template 2)
   useEffect(() => {
@@ -277,6 +294,28 @@ export function SuperAdminEntrepriseDetailPage() {
     setResult2(res)
     setImporting2(false)
     if (res.stocksCreés > 0) loadKpis()
+  }
+
+  const handleCreerProprietaire = async () => {
+    if (!id) return
+    const { prenom, nom, tel, pin } = propForm
+    if (!prenom.trim() || !nom.trim()) { setPropError('Prénom et nom requis'); return }
+    if (!/^\d{4}$/.test(pin)) { setPropError('Le PIN doit être exactement 4 chiffres'); return }
+    setPropSaving(true)
+    setPropError(null)
+    const { error } = await supabase.rpc('creer_proprietaire', {
+      p_prenom: prenom.trim(),
+      p_nom: nom.trim(),
+      p_tel: tel.trim(),
+      p_code_pin: pin,
+      p_entreprise_id: id,
+    })
+    setPropSaving(false)
+    if (error) { setPropError(error.message); return }
+    const nomComplet = `${prenom.trim()} ${nom.trim()}`
+    setPropCree({ nom: nomComplet, pin })
+    setProprietaireExistant({ nom: nomComplet })
+    loadKpis()
   }
 
   const handleToggleUser = async (u: Utilisateur) => {
@@ -387,6 +426,84 @@ export function SuperAdminEntrepriseDetailPage() {
       {/* Tab : Onboarding */}
       {tab === 'onboarding' && (
         <div className="space-y-8 max-w-3xl">
+
+          {/* Étape 0 : Propriétaire */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${proprietaireExistant ? 'bg-green-100 text-green-700' : 'bg-brand-100 text-brand-700'}`}>
+                {proprietaireExistant ? <Check size={16} /> : '0'}
+              </div>
+              <h2 className="text-base font-semibold text-gray-900">Compte propriétaire</h2>
+              {proprietaireExistant && (
+                <span className="text-xs text-green-600 font-medium">Créé</span>
+              )}
+            </div>
+
+            {proprietaireExistant ? (
+              <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+                <p className="text-sm font-medium text-green-800">
+                  ✓ Propriétaire : <span className="font-bold">{proprietaireExistant.nom}</span>
+                </p>
+                {propCree && (
+                  <p className="mt-1 text-xs text-green-700">
+                    Identifiants à communiquer — Nom : <strong>{propCree.nom}</strong> · PIN : <strong className="font-mono">{propCree.pin}</strong>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">
+                  Créez le compte du propriétaire de cette entreprise. Il pourra ensuite se connecter sur <span className="font-mono text-gray-700">/login</span>.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Prénom *</label>
+                    <input
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                      value={propForm.prenom}
+                      onChange={(e) => setPropForm((f) => ({ ...f, prenom: e.target.value }))}
+                      placeholder="Mamadou"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Nom *</label>
+                    <input
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+                      value={propForm.nom}
+                      onChange={(e) => setPropForm((f) => ({ ...f, nom: e.target.value }))}
+                      placeholder="Diallo"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Téléphone (optionnel)</label>
+                    <input
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono focus:border-brand-400 focus:outline-none"
+                      value={propForm.tel}
+                      onChange={(e) => setPropForm((f) => ({ ...f, tel: e.target.value }))}
+                      placeholder="6xx xxx xxx"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">PIN initial (4 chiffres) *</label>
+                    <input
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono tracking-widest focus:border-brand-400 focus:outline-none"
+                      value={propForm.pin}
+                      onChange={(e) => setPropForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                      placeholder="1234"
+                      maxLength={4}
+                    />
+                  </div>
+                </div>
+                {propError && <p className="text-sm text-red-600">{propError}</p>}
+                <Button onClick={handleCreerProprietaire} disabled={propSaving}>
+                  {propSaving ? 'Création…' : 'Créer le compte propriétaire'}
+                </Button>
+              </div>
+            )}
+          </div>
+
           {/* Step 1 */}
           <div className="rounded-xl border border-gray-200 bg-white p-6">
             <div className="flex items-center gap-3 mb-4">
