@@ -1,89 +1,183 @@
 import * as XLSX from 'xlsx'
 
+// ── Helpers ──────────────────────────────────────────────────
+
+// ExcelJS chargé dynamiquement (lazy) pour ne pas alourdir le bundle principal
+async function getExcelJS() {
+  const mod = await import('exceljs')
+  return mod.default
+}
+
+function downloadBuffer(buffer: ArrayBuffer, filename: string) {
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function styleHeader(row: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  row.eachCell((cell: any) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF085041' } }
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
+    cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    cell.border = { bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } } }
+  })
+  row.height = 22
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function addValidation(ws: any, col: string, rowStart: number, rowEnd: number, formulae: string[], prompt?: string) {
+  for (let r = rowStart; r <= rowEnd; r++) {
+    ws.getCell(`${col}${r}`).dataValidation = {
+      type: 'list',
+      allowBlank: true,
+      formulae,
+      showInputMessage: !!prompt,
+      promptTitle: 'Valeurs acceptées',
+      prompt: prompt ?? '',
+      showErrorMessage: true,
+      errorStyle: 'warning',
+      errorTitle: 'Valeur incorrecte',
+      error: 'Choisissez une valeur dans la liste déroulante.',
+    }
+  }
+}
+
 // ── TEMPLATE 1: Dépôts & Gestionnaires ──────────────────────
 
-export function downloadTemplate1(): void {
-  const wb = XLSX.utils.book_new()
+export async function downloadTemplate1(): Promise<void> {
+  const ExcelJS = await getExcelJS()
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'MadinaStock'
 
-  const depotsData = [
-    ['Nom du dépôt', 'Type', 'Localisation'],
+  // ---- Onglet Dépôts ----
+  const ws1 = wb.addWorksheet('Dépôts')
+  ws1.columns = [
+    { key: 'nom', header: 'Nom du dépôt', width: 28 },
+    { key: 'type', header: 'Type', width: 16 },
+    { key: 'localisation', header: 'Localisation', width: 22 },
+  ]
+  styleHeader(ws1.getRow(1))
+
+  const depotsExemples = [
     ['Magasin principal', 'principal', 'Conakry centre'],
     ['Dépôt Madina', 'secondaire', 'Madina'],
     ['Dépôt Ratoma', 'secondaire', 'Ratoma'],
   ]
-  const ws1 = XLSX.utils.aoa_to_sheet(depotsData)
-  ws1['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 20 }]
+  depotsExemples.forEach((row) => ws1.addRow(row))
 
-  if (ws1['B1']) {
-    ws1['B1'].c = [{ a: 'MadinaStock', t: 'Valeurs acceptées: principal, secondaire' }]
-  }
+  addValidation(ws1, 'B', 2, 100, ['"principal,secondaire"'], 'principal ou secondaire')
 
-  XLSX.utils.book_append_sheet(wb, ws1, 'Dépôts')
+  // ---- Onglet Gestionnaires ----
+  const ws2 = wb.addWorksheet('Gestionnaires')
+  ws2.columns = [
+    { key: 'prenom', header: 'Prénom', width: 16 },
+    { key: 'nom', header: 'Nom', width: 16 },
+    { key: 'telephone', header: 'Téléphone', width: 16 },
+    { key: 'role', header: 'Rôle', width: 16 },
+    { key: 'depots', header: 'Dépôts assignés', width: 38 },
+  ]
+  styleHeader(ws2.getRow(1))
 
-  const gestData = [
-    ['Prénom', 'Nom', 'Téléphone', 'Rôle', 'Dépôts assignés'],
+  const gestExemples = [
     ['Mamadou', 'Baldé', '622000001', 'gestionnaire', 'Dépôt Madina'],
     ['Fatoumata', 'Camara', '628000002', 'gestionnaire', 'Dépôt Ratoma, Dépôt Madina'],
     ['Aliou', 'Souaré', '631000003', 'responsable', 'TOUS'],
   ]
-  const ws2 = XLSX.utils.aoa_to_sheet(gestData)
-  ws2['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 35 }]
+  gestExemples.forEach((row) => ws2.addRow(row))
 
-  if (ws2['D1']) {
-    ws2['D1'].c = [{ a: 'MadinaStock', t: 'Valeurs: gestionnaire, responsable' }]
-  }
-  if (ws2['E1']) {
-    ws2['E1'].c = [{ a: 'MadinaStock', t: 'Noms exacts des dépôts (onglet Dépôts) séparés par virgule, ou "TOUS"' }]
-  }
+  addValidation(ws2, 'D', 2, 100, ['"gestionnaire,responsable"'], 'gestionnaire ou responsable')
 
-  XLSX.utils.book_append_sheet(wb, ws2, 'Gestionnaires')
-
-  XLSX.writeFile(wb, 'modele_depots_gestionnaires.xlsx')
+  const buffer = await wb.xlsx.writeBuffer() as ArrayBuffer
+  downloadBuffer(buffer, 'modele_depots_gestionnaires.xlsx')
 }
 
 // ── TEMPLATE 2: Produits & Stocks ───────────────────────────
 
-export function downloadTemplate2(depots: string[] = ['Magasin principal', 'Dépôt Madina']): void {
-  const wb = XLSX.utils.book_new()
+const CATEGORIES = [
+  'Céréales', 'Huiles & graisses', 'Sucre & confiserie',
+  'Boissons', 'Conserves', 'Produits laitiers', 'Autres',
+]
+
+const UNITES = ['Sac', 'Bidon', 'Carton', 'Bouteille', 'Boîte', 'Pièce', 'Kg', 'Litre']
+
+export async function downloadTemplate2(depots: string[] = ['Magasin principal', 'Dépôt Madina']): Promise<void> {
+  const ExcelJS = await getExcelJS()
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'MadinaStock'
+
+  // ---- Onglet caché : Listes (pour les dropdowns dynamiques dépôts) ----
+  const wsListes = wb.addWorksheet('Listes')
+  wsListes.state = 'veryHidden'
+  depots.forEach((nom, i) => {
+    wsListes.getCell(i + 1, 1).value = nom
+  })
+  CATEGORIES.forEach((cat, i) => {
+    wsListes.getCell(i + 1, 2).value = cat
+  })
+  UNITES.forEach((u, i) => {
+    wsListes.getCell(i + 1, 3).value = u
+  })
 
   const firstDepot = depots[0] ?? 'Magasin principal'
   const secondDepot = depots[1] ?? 'Dépôt secondaire'
 
-  const headers = [
-    'Nom produit', 'Catégorie', 'Unité',
-    'Seuil alerte', 'Seuil critique', 'Nom du dépôt', 'Quantité initiale',
+  // ---- Onglet Produits & Stocks ----
+  const ws = wb.addWorksheet('Produits & Stocks')
+  ws.columns = [
+    { key: 'nom', header: 'Nom produit', width: 26 },
+    { key: 'categorie', header: 'Catégorie', width: 22 },
+    { key: 'unite', header: 'Unité', width: 12 },
+    { key: 'seuil_alerte', header: 'Seuil alerte', width: 14 },
+    { key: 'seuil_critique', header: 'Seuil critique', width: 16 },
+    { key: 'depot', header: 'Nom du dépôt', width: 26 },
+    { key: 'qte', header: 'Quantité initiale', width: 18 },
   ]
+  styleHeader(ws.getRow(1))
 
-  const examples = [
+  const exemples = [
     ['Riz importé 50kg', 'Céréales', 'Sac', 20, 10, firstDepot, 150],
     ['Riz importé 50kg', 'Céréales', 'Sac', 20, 10, secondDepot, 45],
     ['Huile végétale 20L', 'Huiles & graisses', 'Bidon', 10, 5, firstDepot, 62],
-    ['Huile végétale 20L', 'Huiles & graisses', 'Bidon', 10, 5, secondDepot, 0],
     ['Sucre 25kg', 'Sucre & confiserie', 'Sac', 15, 5, firstDepot, 30],
   ]
+  exemples.forEach((row) => ws.addRow(row))
 
-  const wsData = [headers, ...examples]
-  const ws = XLSX.utils.aoa_to_sheet(wsData)
-  ws['!cols'] = [
-    { wch: 25 }, { wch: 20 }, { wch: 10 },
-    { wch: 12 }, { wch: 14 }, { wch: 25 }, { wch: 18 },
-  ]
+  // Dropdowns via feuille cachée (dépôts dynamiques)
+  const depotsRange = `Listes!$A$1:$A$${depots.length}`
+  const catsRange = `Listes!$B$1:$B$${CATEGORIES.length}`
+  const unitesRange = `Listes!$C$1:$C$${UNITES.length}`
 
-  if (ws['B1']) {
-    ws['B1'].c = [{ a: 'MadinaStock', t: 'Catégories: Céréales / Huiles & graisses / Sucre & confiserie / Boissons / Conserves / Produits laitiers / Autres' }]
-  }
-  if (ws['C1']) {
-    ws['C1'].c = [{ a: 'MadinaStock', t: 'Unités: Sac / Bidon / Carton / Bouteille / Boîte / Pièce / Kg / Litre' }]
-  }
-  if (ws['F1']) {
-    ws['F1'].c = [{ a: 'MadinaStock', t: 'Doit correspondre exactement au nom dans le fichier Dépôts & Gestionnaires' }]
-  }
-  if (ws['G1']) {
-    ws['G1'].c = [{ a: 'MadinaStock', t: '0 est accepté (stock vide mais produit enregistré)' }]
+  for (let r = 2; r <= 200; r++) {
+    ws.getCell(`B${r}`).dataValidation = {
+      type: 'list', allowBlank: true,
+      formulae: [catsRange],
+      showErrorMessage: true, errorStyle: 'warning',
+      errorTitle: 'Catégorie invalide', error: 'Choisissez dans la liste.',
+    }
+    ws.getCell(`C${r}`).dataValidation = {
+      type: 'list', allowBlank: true,
+      formulae: [unitesRange],
+      showErrorMessage: true, errorStyle: 'warning',
+      errorTitle: 'Unité invalide', error: 'Choisissez dans la liste.',
+    }
+    ws.getCell(`F${r}`).dataValidation = {
+      type: 'list', allowBlank: true,
+      formulae: [depotsRange],
+      showErrorMessage: true, errorStyle: 'warning',
+      errorTitle: 'Dépôt invalide', error: 'Choisissez un dépôt dans la liste.',
+    }
   }
 
-  XLSX.utils.book_append_sheet(wb, ws, 'Produits & Stocks')
-  XLSX.writeFile(wb, 'modele_produits_stocks.xlsx')
+  const buffer = await wb.xlsx.writeBuffer() as ArrayBuffer
+  downloadBuffer(buffer, 'modele_produits_stocks.xlsx')
 }
 
 // ── Types ────────────────────────────────────────────────────
@@ -209,14 +303,8 @@ export function parseFichier1(file: File): Promise<{
 
 // ── PARSER: Fichier 2 ────────────────────────────────────────
 
-const CATEGORIES_VALIDES = [
-  'Céréales', 'Huiles & graisses', 'Sucre & confiserie',
-  'Boissons', 'Conserves', 'Produits laitiers', 'Autres',
-]
-
-const UNITES_VALIDES = [
-  'Sac', 'Bidon', 'Carton', 'Bouteille', 'Boîte', 'Pièce', 'Kg', 'Litre',
-]
+const CATEGORIES_VALIDES = CATEGORIES
+const UNITES_VALIDES = UNITES
 
 export function parseFichier2(file: File): Promise<ProduitStockRow[]> {
   return new Promise((resolve, reject) => {

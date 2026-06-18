@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth, listerUtilisateurs } from '../hooks/useAuth'
+import { useAuth } from '../hooks/useAuth'
 import { Button } from '../components/ui/Button'
 import { PinDots, PinKeypad } from '../components/ui/PinKeypad'
 import { normaliserTelephone } from '../lib/utils'
-import type { Utilisateur } from '../types'
 
 const PIN_LENGTH = 4
 const MAX_ATTEMPTS = 5
@@ -16,16 +15,12 @@ export function LoginPage() {
   const { login, loginTel, loading } = useAuth()
   const navigate = useNavigate()
 
-  const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([])
-  const [chargementUtilisateurs, setChargementUtilisateurs] = useState(true)
-  const [erreurUtilisateurs, setErreurUtilisateurs] = useState<string | null>(null)
-
   const [role, setRole] = useState<RoleChoix | ''>('')
   const [visible, setVisible] = useState(false)
   const [now, setNow] = useState(() => Date.now())
 
   // --- Section propriétaire ---
-  const [proprietaireId, setProprietaireId] = useState('')
+  const [nomProprietaire, setNomProprietaire] = useState('')
   const [pinProprietaire, setPinProprietaire] = useState('')
   const [erreurProprietaire, setErreurProprietaire] = useState<string | null>(null)
   const [attemptsProprietaire, setAttemptsProprietaire] = useState(0)
@@ -37,20 +32,6 @@ export function LoginPage() {
   const [erreurGestionnaire, setErreurGestionnaire] = useState<string | null>(null)
   const [attemptsGestionnaire, setAttemptsGestionnaire] = useState(0)
   const [lockedUntilGestionnaire, setLockedUntilGestionnaire] = useState<number | null>(null)
-
-  useEffect(() => {
-    listerUtilisateurs()
-      .then((users) => {
-        setUtilisateurs(users)
-        const proprietaires = users.filter((u) => u.role === 'proprietaire')
-        if (proprietaires.length > 0) setProprietaireId(proprietaires[0].id)
-      })
-      .catch((err) => {
-        console.error('Erreur chargement utilisateurs:', err)
-        setErreurUtilisateurs('Impossible de charger les utilisateurs')
-      })
-      .finally(() => setChargementUtilisateurs(false))
-  }, [])
 
   // Anime l'apparition du formulaire (translateY + opacity, 200ms ease-out)
   useEffect(() => {
@@ -70,8 +51,6 @@ export function LoginPage() {
     return () => clearInterval(interval)
   }, [lockedUntilProprietaire, lockedUntilGestionnaire])
 
-  const proprietaires = utilisateurs.filter((u) => u.role === 'proprietaire')
-
   const isLockedProprietaire = lockedUntilProprietaire !== null && now < lockedUntilProprietaire
   const isLockedGestionnaire = lockedUntilGestionnaire !== null && now < lockedUntilGestionnaire
 
@@ -88,10 +67,9 @@ export function LoginPage() {
 
   const handleSubmitProprietaire = async () => {
     if (isLockedProprietaire) return
-    const utilisateur = proprietaires.find((u) => u.id === proprietaireId)
-    if (!utilisateur || pinProprietaire.length !== PIN_LENGTH) return
+    if (!nomProprietaire.trim() || pinProprietaire.length !== PIN_LENGTH) return
 
-    const { user, error: err } = await login(utilisateur.nom, pinProprietaire)
+    const { user, error: err } = await login(nomProprietaire.trim(), pinProprietaire)
     if (err || !user) {
       setPinProprietaire('')
       const next = attemptsProprietaire + 1
@@ -101,7 +79,7 @@ export function LoginPage() {
         setErreurProprietaire(null)
       } else {
         setAttemptsProprietaire(next)
-        setErreurProprietaire('Code PIN incorrect')
+        setErreurProprietaire(err ?? 'Nom ou code PIN incorrect')
       }
       return
     }
@@ -129,7 +107,6 @@ export function LoginPage() {
 
     if (err || !user) {
       setPinGestionnaire('')
-      const numeroConnu = utilisateurs.some((u) => u.contact_wa === telNormalise)
       const next = attemptsGestionnaire + 1
       if (next >= MAX_ATTEMPTS) {
         setAttemptsGestionnaire(0)
@@ -137,7 +114,7 @@ export function LoginPage() {
         setErreurGestionnaire(null)
       } else {
         setAttemptsGestionnaire(next)
-        setErreurGestionnaire(numeroConnu ? 'Code PIN incorrect' : 'Numéro non reconnu')
+        setErreurGestionnaire(err ?? 'Téléphone ou code PIN incorrect')
       }
       return
     }
@@ -180,36 +157,19 @@ export function LoginPage() {
           <h2 className="text-sm font-bold uppercase tracking-wide text-brand-800">Propriétaire</h2>
 
           <label className="mt-4 block text-sm font-medium text-gray-700">
-            Nom
-            {chargementUtilisateurs ? (
-              <div className="mt-1 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-400">
-                Chargement...
-              </div>
-            ) : erreurUtilisateurs ? (
-              <div className="mt-1 rounded-xl border border-danger-100 bg-danger-50 px-3 py-2 text-sm text-danger-600">
-                {erreurUtilisateurs}
-              </div>
-            ) : proprietaires.length === 0 ? (
-              <div className="mt-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-600">
-                Aucun propriétaire trouvé
-              </div>
-            ) : (
-              <select
-                value={proprietaireId}
-                onChange={(e) => {
-                  setProprietaireId(e.target.value)
-                  setPinProprietaire('')
-                  setErreurProprietaire(null)
-                }}
-                className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
-              >
-                {proprietaires.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nom}
-                  </option>
-                ))}
-              </select>
-            )}
+            Nom complet
+            <input
+              type="text"
+              value={nomProprietaire}
+              onChange={(e) => {
+                setNomProprietaire(e.target.value)
+                setPinProprietaire('')
+                setErreurProprietaire(null)
+              }}
+              placeholder="Ex: Mamadou Diallo"
+              autoComplete="off"
+              className="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2 text-sm focus:border-brand-400 focus:outline-none"
+            />
           </label>
 
           <div className="mt-4">
@@ -239,8 +199,7 @@ export function LoginPage() {
             onClick={handleSubmitProprietaire}
             disabled={
               loading ||
-              chargementUtilisateurs ||
-              !proprietaireId ||
+              !nomProprietaire.trim() ||
               pinProprietaire.length !== PIN_LENGTH ||
               isLockedProprietaire
             }

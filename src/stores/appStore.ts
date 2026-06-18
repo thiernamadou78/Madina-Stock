@@ -39,7 +39,7 @@ export const useAppStore = create<AppState>()(
         })),
       marquerTousLus: () =>
         set((state) => ({ notifications: state.notifications.map((n) => ({ ...n, lu: true })) })),
-      reset: () => set({ user: null, depots: [], depotActifId: null }),
+      reset: () => set({ user: null, depots: [], depotActifId: null, notifications: [] }),
     }),
     {
       name: 'madina-stock-app',

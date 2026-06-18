@@ -30,10 +30,31 @@ import type { Role } from '../types'
 function AppLayout() {
   useBonsEnAttenteWatcher()
   useNotificationActionListener()
+  const user = useAppStore((s) => s.user)
+  const [joursRestants, setJoursRestants] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!user?.entreprise_id) return
+    supabase
+      .from('entreprises')
+      .select('date_expiration, statut')
+      .eq('id', user.entreprise_id)
+      .single()
+      .then(({ data }) => {
+        if (!data?.date_expiration || data.statut === 'actif') return
+        const diff = Math.ceil((new Date(data.date_expiration).getTime() - Date.now()) / 86400000)
+        if (diff > 0 && diff <= 5) setJoursRestants(diff)
+      })
+  }, [user?.entreprise_id])
 
   return (
     <div className="min-h-[100dvh] bg-gray-50">
       <TopBar />
+      {joursRestants !== null && (
+        <div className="bg-amber-500 px-4 py-2.5 text-center text-sm font-semibold text-white">
+          ⚠ Abonnement expire dans {joursRestants} jour{joursRestants > 1 ? 's' : ''} — Contactez MadinaStock pour renouveler
+        </div>
+      )}
       <main className="px-4 py-4 pb-24">
         <Outlet />
       </main>
