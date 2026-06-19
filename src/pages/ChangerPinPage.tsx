@@ -19,6 +19,10 @@ export function ChangerPinPage() {
   const [confirmationPin, setConfirmationPin] = useState('')
   const [erreur, setErreur] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  // Bloque brièvement la saisie au changement d'étape pour éviter qu'un
+  // double-clic/double-touch sur le dernier chiffre ne "déborde" sur
+  // l'étape suivante (un chiffre fantôme s'ajoutait à la confirmation).
+  const [verrouille, setVerrouille] = useState(false)
 
   const valeurAffichee = etape === 'nouveau' ? nouveauPin : confirmationPin
 
@@ -27,6 +31,7 @@ export function ChangerPinPage() {
     setNouveauPin('')
     setConfirmationPin('')
     setEtape('nouveau')
+    setVerrouille(false)
   }
 
   const valider = async (confirmation: string) => {
@@ -53,25 +58,34 @@ export function ChangerPinPage() {
   }
 
   const handleDigit = (digit: string) => {
-    if (loading) return
+    if (loading || verrouille) return
     setErreur(null)
 
     if (etape === 'nouveau') {
       if (nouveauPin.length >= PIN_LENGTH) return
       const next = nouveauPin + digit
       setNouveauPin(next)
-      if (next.length === PIN_LENGTH) setEtape('confirmation')
+      if (next.length === PIN_LENGTH) {
+        setVerrouille(true)
+        setTimeout(() => {
+          setEtape('confirmation')
+          setVerrouille(false)
+        }, 300)
+      }
       return
     }
 
     if (confirmationPin.length >= PIN_LENGTH) return
     const next = confirmationPin + digit
     setConfirmationPin(next)
-    if (next.length === PIN_LENGTH) void valider(next)
+    if (next.length === PIN_LENGTH) {
+      setVerrouille(true)
+      void valider(next)
+    }
   }
 
   const handleBackspace = () => {
-    if (loading) return
+    if (loading || verrouille) return
     setErreur(null)
     if (etape === 'nouveau') setNouveauPin((p) => p.slice(0, -1))
     else setConfirmationPin((p) => p.slice(0, -1))
@@ -104,7 +118,7 @@ export function ChangerPinPage() {
             <p className="mt-3 text-center text-sm font-medium text-danger-600">{erreur}</p>
           )}
 
-          <PinKeypad onDigit={handleDigit} onBackspace={handleBackspace} disabled={loading} />
+          <PinKeypad onDigit={handleDigit} onBackspace={handleBackspace} disabled={loading || verrouille} />
         </div>
 
         {user && (
