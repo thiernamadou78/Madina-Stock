@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, LogOut } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../hooks/useAuth'
 import { useAppStore } from '../stores/appStore'
 import { PinDots, PinKeypad } from '../components/ui/PinKeypad'
 
@@ -10,6 +11,7 @@ const PIN_LENGTH = 4
 export function ChangerPinPage() {
   const user = useAppStore((s) => s.user)
   const setUser = useAppStore((s) => s.setUser)
+  const { logout } = useAuth()
   const navigate = useNavigate()
 
   const [etape, setEtape] = useState<'nouveau' | 'confirmation'>('nouveau')
@@ -75,6 +77,11 @@ export function ChangerPinPage() {
     else setConfirmationPin((p) => p.slice(0, -1))
   }
 
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-brand-800 px-6">
       <div className="w-full max-w-sm">
@@ -99,6 +106,17 @@ export function ChangerPinPage() {
 
           <PinKeypad onDigit={handleDigit} onBackspace={handleBackspace} disabled={loading} />
         </div>
+
+        {user && (
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-4 flex w-full items-center justify-center gap-2 text-sm font-medium text-white/70 hover:text-white"
+          >
+            <LogOut size={15} />
+            Ce n'est pas moi — se déconnecter
+          </button>
+        )}
       </div>
     </div>
   )
