@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase'
 import { TopBar } from '../components/layout/TopBar'
 import { BottomNav } from '../components/ui/BottomNav'
 import { LoginPage } from '../pages/LoginPage'
+import { ChangerPinPage } from '../pages/ChangerPinPage'
 import { OnboardingPage } from '../pages/OnboardingPage'
 import { SelectDepotPage } from '../pages/SelectDepotPage'
 import { HomePage } from '../pages/HomePage'
@@ -65,10 +66,11 @@ function AppLayout() {
 
 function ProtectedRoute() {
   const { isAuthenticated, depotActifId } = useAuth()
-  const role = useAppStore((s) => s.user?.role)
+  const user = useAppStore((s) => s.user)
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (role === 'superadmin') return <Navigate to="/superadmin" replace />
+  if (user?.role === 'superadmin') return <Navigate to="/superadmin" replace />
+  if (user?.pin_change_required) return <Navigate to="/changer-pin" replace />
   if (!depotActifId) return <Navigate to="/select-depot" replace />
 
   return <AppLayout />
@@ -76,11 +78,20 @@ function ProtectedRoute() {
 
 function SuperAdminRoute() {
   const { isAuthenticated } = useAuth()
-  const role = useAppStore((s) => s.user?.role)
+  const user = useAppStore((s) => s.user)
 
-  if (!isAuthenticated || role !== 'superadmin') return <Navigate to="/superadmin-login" replace />
+  if (!isAuthenticated || user?.role !== 'superadmin') return <Navigate to="/superadmin-login" replace />
+  if (user.pin_change_required) return <Navigate to="/changer-pin" replace />
 
   return <SuperAdminLayout />
+}
+
+function ChangerPinRoute() {
+  const { isAuthenticated } = useAuth()
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+
+  return <ChangerPinPage />
 }
 
 function RoleRoute({ roles }: { roles: Role[] }) {
@@ -93,7 +104,8 @@ function RoleRoute({ roles }: { roles: Role[] }) {
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth()
-  const role = useAppStore((s) => s.user?.role)
+  const user = useAppStore((s) => s.user)
+  const role = user?.role
 
   const loginRedirect = isAuthenticated
     ? (role === 'superadmin' ? <Navigate to="/superadmin" replace /> : <Navigate to="/select-depot" replace />)
@@ -103,11 +115,13 @@ function AppRoutes() {
     <Routes>
       <Route path="/onboarding" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={loginRedirect} />
+      <Route path="/changer-pin" element={<ChangerPinRoute />} />
       <Route
         path="/select-depot"
         element={
           !isAuthenticated ? <Navigate to="/login" replace />
             : role === 'superadmin' ? <Navigate to="/superadmin" replace />
+            : user?.pin_change_required ? <Navigate to="/changer-pin" replace />
             : <SelectDepotPage />
         }
       />

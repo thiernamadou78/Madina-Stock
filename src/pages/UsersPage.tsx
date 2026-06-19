@@ -210,7 +210,7 @@ export function UsersPage() {
     setSaving(false)
 
     if (err) {
-      setFormError(err.message)
+      setFormError(err.message === 'NUMERO_DEJA_UTILISE' ? 'Ce numéro est déjà utilisé par un autre compte' : err.message)
       return
     }
 

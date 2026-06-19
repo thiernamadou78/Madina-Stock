@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check, Download, Upload, Users, History, BarChart3, Home } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { normaliserTelephone } from '../../lib/utils'
 import { Button } from '../../components/ui/Button'
 import { downloadTemplate1, downloadTemplate2, parseFichier1, parseFichier2 } from '../../lib/excelTemplates'
 import { importerFichier1, importerFichier2 } from '../../lib/importOnboarding'
@@ -300,18 +301,22 @@ export function SuperAdminEntrepriseDetailPage() {
     if (!id) return
     const { prenom, nom, tel, pin } = propForm
     if (!prenom.trim() || !nom.trim()) { setPropError('Prénom et nom requis'); return }
+    if (!tel.trim()) { setPropError('Le numéro de téléphone est requis'); return }
     if (!/^\d{4}$/.test(pin)) { setPropError('Le PIN doit être exactement 4 chiffres'); return }
     setPropSaving(true)
     setPropError(null)
     const { error } = await supabase.rpc('creer_proprietaire', {
       p_prenom: prenom.trim(),
       p_nom: nom.trim(),
-      p_tel: tel.trim(),
+      p_tel: normaliserTelephone(tel.trim()),
       p_code_pin: pin,
       p_entreprise_id: id,
     })
     setPropSaving(false)
-    if (error) { setPropError(error.message); return }
+    if (error) {
+      setPropError(error.message === 'NUMERO_DEJA_UTILISE' ? 'Ce numéro est déjà utilisé par un autre compte de cette entreprise' : error.message)
+      return
+    }
     const nomComplet = `${prenom.trim()} ${nom.trim()}`
     setPropCree({ nom: nomComplet, pin })
     setProprietaireExistant({ nom: nomComplet })
@@ -477,7 +482,7 @@ export function SuperAdminEntrepriseDetailPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Téléphone (optionnel)</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Téléphone *</label>
                     <input
                       className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono focus:border-brand-400 focus:outline-none"
                       value={propForm.tel}

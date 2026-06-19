@@ -49,7 +49,8 @@ export async function importerFichier1(
       p_entreprise_id: entrepriseId,
     })
     if (error) {
-      erreurs.push(`Gestionnaire "${g.prenom} ${g.nom}": ${error.message}`)
+      const msg = error.message === 'NUMERO_DEJA_UTILISE' ? 'ce numéro est déjà utilisé par un autre compte' : error.message
+      erreurs.push(`Gestionnaire "${g.prenom} ${g.nom}": ${msg}`)
     } else {
       gestCreés++
     }

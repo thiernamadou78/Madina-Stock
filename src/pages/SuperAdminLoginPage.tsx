@@ -21,7 +21,7 @@ export function SuperAdminLoginPage() {
     if (newPin.length === PIN_LENGTH) {
       const result = await login('SuperAdmin', newPin)
       if (result.user) {
-        navigate('/superadmin', { replace: true })
+        navigate(result.user.pin_change_required ? '/changer-pin' : '/superadmin', { replace: true })
       } else {
         setErreur('Accès refusé')
         setTimeout(() => setPin(''), 600)
