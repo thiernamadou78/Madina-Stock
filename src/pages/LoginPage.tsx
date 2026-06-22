@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { LogIn, Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { Button } from '../components/ui/Button'
 import { PinDots, PinKeypad } from '../components/ui/PinKeypad'
 import { normaliserTelephone } from '../lib/utils'
 
@@ -101,7 +101,14 @@ export function LoginPage() {
           <PinDots value={pin} />
         </div>
 
-        <PinKeypad onDigit={handleDigit} onBackspace={handleBackspace} disabled={isLocked} />
+        <PinKeypad
+          onDigit={handleDigit}
+          onBackspace={handleBackspace}
+          disabled={isLocked}
+          onAction={handleSubmit}
+          actionDisabled={loading || !tel.trim() || pin.length !== PIN_LENGTH || isLocked}
+          actionIcon={loading ? <Loader2 size={22} className="animate-spin" /> : <LogIn size={22} />}
+        />
 
         {isLocked ? (
           <p className="mt-3 text-center text-sm text-danger-600">
@@ -110,15 +117,6 @@ export function LoginPage() {
         ) : (
           erreur && <p className="mt-3 text-center text-sm text-danger-600">{erreur}</p>
         )}
-
-        <Button
-          fullWidth
-          className="mt-4"
-          onClick={handleSubmit}
-          disabled={loading || !tel.trim() || pin.length !== PIN_LENGTH || isLocked}
-        >
-          {loading ? 'Connexion...' : 'Se connecter'}
-        </Button>
       </div>
     </div>
   )

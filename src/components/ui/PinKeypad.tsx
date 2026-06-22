@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Delete } from 'lucide-react'
 
 const PIN_LENGTH = 4
@@ -20,10 +21,16 @@ export function PinKeypad({
   onDigit,
   onBackspace,
   disabled,
+  actionIcon,
+  onAction,
+  actionDisabled,
 }: {
   onDigit: (digit: string) => void
   onBackspace: () => void
   disabled?: boolean
+  actionIcon?: ReactNode
+  onAction?: () => void
+  actionDisabled?: boolean
 }) {
   return (
     <div className="mt-4 grid grid-cols-3 gap-3">
@@ -55,7 +62,19 @@ export function PinKeypad({
       >
         0
       </button>
-      <div />
+      {onAction ? (
+        <button
+          type="button"
+          aria-label="Se connecter"
+          disabled={disabled || actionDisabled}
+          onClick={onAction}
+          className="flex items-center justify-center rounded-2xl bg-brand-800 py-4 text-white hover:bg-brand-900 active:bg-brand-950 disabled:opacity-40"
+        >
+          {actionIcon}
+        </button>
+      ) : (
+        <div />
+      )}
     </div>
   )
 }
