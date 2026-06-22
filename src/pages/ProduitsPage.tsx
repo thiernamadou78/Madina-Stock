@@ -28,10 +28,11 @@ interface ProduitModalProps {
   initialNom: string
   depots: Depot[]
   depotActifId: string | null
+  entrepriseId?: string
   onSaved: (message: string) => void
 }
 
-function ProduitModal({ open, onClose, produit, initialNom, depots, depotActifId, onSaved }: ProduitModalProps) {
+function ProduitModal({ open, onClose, produit, initialNom, depots, depotActifId, entrepriseId, onSaved }: ProduitModalProps) {
   const [nom, setNom] = useState('')
   const [categorie, setCategorie] = useState(CATEGORIES_PRODUIT[0])
   const [unite, setUnite] = useState(UNITES_PRODUIT[0])
@@ -119,7 +120,7 @@ function ProduitModal({ open, onClose, produit, initialNom, depots, depotActifId
 
     const { data: created, error: err } = await supabase
       .from('produits')
-      .insert({ nom: nom.trim(), categorie, unite, actif: true })
+      .insert({ nom: nom.trim(), categorie, unite, actif: true, entreprise_id: entrepriseId ?? null })
       .select()
       .single()
 
@@ -137,6 +138,7 @@ function ProduitModal({ open, onClose, produit, initialNom, depots, depotActifId
           qte_disponible: 0,
           seuil_alerte: seuilAlerteNum,
           seuil_critique: seuilCritiqueNum,
+          entreprise_id: entrepriseId ?? null,
         }))
       )
     }
@@ -231,6 +233,7 @@ function ProduitModal({ open, onClose, produit, initialNom, depots, depotActifId
 
 export function ProduitsPage() {
   const role = useAppStore((s) => s.user?.role)
+  const entrepriseId = useAppStore((s) => s.user?.entreprise_id)
   const depots = useAppStore((s) => s.depots)
   const depotActifId = useAppStore((s) => s.depotActifId)
   const canEdit = role === 'proprietaire' || role === 'admin'
@@ -248,8 +251,8 @@ export function ProduitsPage() {
     setLoading(true)
 
     const [produitsRes, stockRes] = await Promise.all([
-      supabase.from('produits').select('*').eq('actif', true).order('nom'),
-      supabase.from('stock_produits').select('produit_id, qte_disponible'),
+      supabase.from('produits').select('*').eq('actif', true).eq('entreprise_id', entrepriseId ?? '').order('nom'),
+      supabase.from('stock_produits').select('produit_id, qte_disponible').eq('entreprise_id', entrepriseId ?? ''),
     ])
 
     const totals: Record<string, number> = {}
@@ -260,7 +263,7 @@ export function ProduitsPage() {
     setProduits((produitsRes.data ?? []) as unknown as Produit[])
     setStockTotals(totals)
     setLoading(false)
-  }, [])
+  }, [entrepriseId])
 
   useEffect(() => {
     refresh()
@@ -360,6 +363,7 @@ export function ProduitsPage() {
         initialNom={initialNom}
         depots={depots}
         depotActifId={depotActifId}
+        entrepriseId={entrepriseId}
         onSaved={handleSaved}
       />
 
