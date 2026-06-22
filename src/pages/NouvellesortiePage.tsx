@@ -26,7 +26,8 @@ export function NouvelleSortiePage() {
   const [search, setSearch] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
   const [produitId, setProduitId] = useState<string | null>(null)
-  const [quantite, setQuantite] = useState(1)
+  const [quantiteStr, setQuantiteStr] = useState('1')
+  const quantite = parseInt(quantiteStr, 10) || 0
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,7 +58,7 @@ export function NouvelleSortiePage() {
     setProduitId(s.produit_id)
     setSearch(s.produit?.nom ?? '')
     setShowDropdown(false)
-    setQuantite(1)
+    setQuantiteStr('1')
   }
 
   const quantiteInvalide = selectedStock != null && disponible > 0 && quantite > disponible
@@ -100,7 +101,7 @@ export function NouvelleSortiePage() {
     setBonCree(null)
     setProduitId(null)
     setSearch('')
-    setQuantite(1)
+    setQuantiteStr('1')
     setMotif('vente')
     setDepotDestinationId('')
   }
@@ -249,24 +250,25 @@ export function NouvelleSortiePage() {
             <button
               type="button"
               aria-label="Diminuer la quantité"
-              onClick={() => setQuantite((q) => Math.max(1, q - 1))}
+              onClick={() => setQuantiteStr(String(Math.max(1, quantite - 1)))}
               className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700"
             >
               <Minus size={18} />
             </button>
             <input
               type="number"
-              min="1"
+              min="0"
+              inputMode="numeric"
               aria-label="Quantité"
               placeholder="Quantité"
-              value={quantite}
-              onChange={(e) => setQuantite(Math.max(1, Number(e.target.value) || 1))}
+              value={quantiteStr}
+              onChange={(e) => setQuantiteStr(e.target.value.replace(/[^\d]/g, ''))}
               className="w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm focus:border-brand-400 focus:outline-none"
             />
             <button
               type="button"
               aria-label="Augmenter la quantité"
-              onClick={() => setQuantite((q) => q + 1)}
+              onClick={() => setQuantiteStr(String(quantite + 1))}
               className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700"
             >
               <Plus size={18} />

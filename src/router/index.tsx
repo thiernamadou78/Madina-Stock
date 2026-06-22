@@ -4,10 +4,12 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useAppStore } from '../stores/appStore'
 import { useBonsEnAttenteWatcher } from '../hooks/useBonsEnAttenteWatcher'
+import { useMesBonsResultatsWatcher } from '../hooks/useMesBonsResultatsWatcher'
 import { useNotificationActionListener } from '../hooks/useNotificationActionListener'
 import { supabase } from '../lib/supabase'
 import { TopBar } from '../components/layout/TopBar'
 import { BottomNav } from '../components/ui/BottomNav'
+import { Toast } from '../components/ui/Toast'
 import { LoginPage } from '../pages/LoginPage'
 import { ChangerPinPage } from '../pages/ChangerPinPage'
 import { OnboardingPage } from '../pages/OnboardingPage'
@@ -30,6 +32,7 @@ import type { Role } from '../types'
 
 function AppLayout() {
   useBonsEnAttenteWatcher()
+  useMesBonsResultatsWatcher()
   useNotificationActionListener()
   const user = useAppStore((s) => s.user)
   const [joursRestants, setJoursRestants] = useState<number | null>(null)
@@ -50,6 +53,7 @@ function AppLayout() {
 
   return (
     <div className="min-h-[100dvh] bg-gray-50">
+      <Toast />
       <TopBar />
       {joursRestants !== null && (
         <div className="bg-amber-500 px-4 py-2.5 text-center text-sm font-semibold text-white">

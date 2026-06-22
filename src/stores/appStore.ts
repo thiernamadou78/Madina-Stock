@@ -4,11 +4,19 @@ import type { Depot, NotificationItem, Utilisateur } from '../types'
 
 const MAX_NOTIFICATIONS = 20
 
+export interface ToastItem {
+  id: string
+  titre: string
+  message: string
+  variant: 'success' | 'error'
+}
+
 interface AppState {
   user: Utilisateur | null
   depots: Depot[]
   depotActifId: string | null
   notifications: NotificationItem[]
+  toast: ToastItem | null
   setUser: (user: Utilisateur | null) => void
   setDepots: (depots: Depot[]) => void
   setDepotActif: (depotId: string | null) => void
@@ -16,6 +24,8 @@ interface AppState {
   removeNotification: (id: string) => void
   marquerLu: (id: string) => void
   marquerTousLus: () => void
+  showToast: (toast: ToastItem) => void
+  clearToast: () => void
   reset: () => void
 }
 
@@ -26,6 +36,7 @@ export const useAppStore = create<AppState>()(
       depots: [],
       depotActifId: null,
       notifications: [],
+      toast: null,
       setUser: (user) => set({ user }),
       setDepots: (depots) => set({ depots }),
       setDepotActif: (depotId) => set({ depotActifId: depotId }),
@@ -39,10 +50,18 @@ export const useAppStore = create<AppState>()(
         })),
       marquerTousLus: () =>
         set((state) => ({ notifications: state.notifications.map((n) => ({ ...n, lu: true })) })),
-      reset: () => set({ user: null, depots: [], depotActifId: null, notifications: [] }),
+      showToast: (toast) => set({ toast }),
+      clearToast: () => set({ toast: null }),
+      reset: () => set({ user: null, depots: [], depotActifId: null, notifications: [], toast: null }),
     }),
     {
       name: 'madina-stock-app',
+      partialize: (state) => ({
+        user: state.user,
+        depots: state.depots,
+        depotActifId: state.depotActifId,
+        notifications: state.notifications,
+      }),
     }
   )
 )

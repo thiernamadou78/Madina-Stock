@@ -46,7 +46,8 @@ export function ReceptionPage() {
   const [lignes, setLignes] = useState<LigneForm[]>([])
 
   const [selectedProduit, setSelectedProduit] = useState<Produit | null>(null)
-  const [stagingQte, setStagingQte] = useState(1)
+  const [stagingQteStr, setStagingQteStr] = useState('1')
+  const stagingQte = parseInt(stagingQteStr, 10) || 0
   const [stagingPrix, setStagingPrix] = useState('')
 
   const [creatingProduct, setCreatingProduct] = useState(false)
@@ -78,7 +79,7 @@ export function ReceptionPage() {
   const handleSelectProduit = (p: Produit) => {
     setSelectedProduit(p)
     setSearch('')
-    setStagingQte(1)
+    setStagingQteStr('1')
     setStagingPrix('')
   }
 
@@ -95,7 +96,7 @@ export function ReceptionPage() {
       },
     ])
     setSelectedProduit(null)
-    setStagingQte(1)
+    setStagingQteStr('1')
     setStagingPrix('')
   }
 
@@ -138,7 +139,7 @@ export function ReceptionPage() {
     setCreatingProductLoading(false)
     setProduits((prev) => [...prev, produit as Produit])
     setSelectedProduit(produit as Produit)
-    setStagingQte(1)
+    setStagingQteStr('1')
     setStagingPrix('')
     setCreatingProduct(false)
     setSearch('')
@@ -477,23 +478,24 @@ export function ReceptionPage() {
                   <button
                     type="button"
                     aria-label="Diminuer la quantité"
-                    onClick={() => setStagingQte((q) => Math.max(1, q - 1))}
+                    onClick={() => setStagingQteStr(String(Math.max(1, stagingQte - 1)))}
                     className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700"
                   >
                     <Minus size={16} />
                   </button>
                   <input
                     type="number"
-                    min="1"
+                    min="0"
+                    inputMode="numeric"
                     aria-label="Quantité reçue"
-                    value={stagingQte}
-                    onChange={(e) => setStagingQte(Math.max(1, Number(e.target.value) || 1))}
+                    value={stagingQteStr}
+                    onChange={(e) => setStagingQteStr(e.target.value.replace(/[^\d]/g, ''))}
                     className="w-20 rounded-xl border border-gray-200 px-3 py-2 text-center text-sm focus:border-brand-400 focus:outline-none"
                   />
                   <button
                     type="button"
                     aria-label="Augmenter la quantité"
-                    onClick={() => setStagingQte((q) => q + 1)}
+                    onClick={() => setStagingQteStr(String(stagingQte + 1))}
                     className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-700"
                   >
                     <Plus size={16} />
@@ -518,7 +520,7 @@ export function ReceptionPage() {
                 Total : {(stagingQte * (Number(stagingPrix) || 0)).toLocaleString()} GNF
               </div>
 
-              <Button fullWidth icon={<Plus size={18} />} disabled={!(Number(stagingPrix) > 0)} onClick={handleAjouterLigne}>
+              <Button fullWidth icon={<Plus size={18} />} disabled={stagingQte <= 0 || !(Number(stagingPrix) > 0)} onClick={handleAjouterLigne}>
                 Ajouter à la réception
               </Button>
             </div>
