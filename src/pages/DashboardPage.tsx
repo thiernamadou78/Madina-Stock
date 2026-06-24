@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { ChevronDown, PackageMinus, PackagePlus, Warehouse } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowRight, ChevronDown, PackageMinus, PackagePlus, Warehouse } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
 import { computeStatutStock } from '../hooks/useStock'
@@ -136,14 +137,16 @@ type BonJourItem =
   | { type: 'sortie'; bon: BonSortieGlobal }
   | { type: 'reception'; bon: BonReceptionGlobal }
 
-type Tab = 'general' | 'stocks' | 'bons-jour' | 'mouvements'
+const CARTES = ['apercu', 'valider', 'alertes', 'stocks', 'activite'] as const
+type Carte = (typeof CARTES)[number]
 
-const TABS: { value: Tab; label: string }[] = [
-  { value: 'general', label: 'Vue générale' },
-  { value: 'stocks', label: 'Stocks par dépôt' },
-  { value: 'bons-jour', label: 'Bons du jour' },
-  { value: 'mouvements', label: 'Mouvements récents' },
-]
+const CARTE_TITRES: Record<Carte, string> = {
+  apercu: 'Aperçu',
+  valider: 'À valider',
+  alertes: 'Alertes stock',
+  stocks: 'Stocks par dépôt',
+  activite: 'Activité récente',
+}
 
 const SEVERITE: Record<TypeAlerte, number> = { rupture: 0, critique: 1, alerte: 2, levee: 3 }
 
@@ -154,47 +157,119 @@ const ALERTE_COLORS: Record<TypeAlerte, 'brand' | 'blue' | 'amber' | 'danger' | 
   levee: 'brand',
 }
 
-const STATUT_OPTIONS = [
-  { value: 'en_attente', label: 'En attente' },
-  { value: 'approuve', label: 'Approuvé' },
-  { value: 'valide', label: 'Validé' },
-  { value: 'rejete', label: 'Rejeté' },
-  { value: 'expire', label: 'Expiré' },
-]
+type StatutStockKey = 'ok' | 'alerte' | 'critique' | 'rupture'
+
+const RING_STROKE_CLASSES: Record<StatutStockKey, string> = {
+  ok: 'stroke-brand-800',
+  alerte: 'stroke-amber-500',
+  critique: 'stroke-danger-600',
+  rupture: 'stroke-gray-500',
+}
+
+const RING_DOT_CLASSES: Record<StatutStockKey, string> = {
+  ok: 'bg-brand-800',
+  alerte: 'bg-amber-500',
+  critique: 'bg-danger-600',
+  rupture: 'bg-gray-500',
+}
+
+function HealthRing({ stock }: { stock: StockGlobal[] }) {
+  const total = stock.length
+  const counts: Record<StatutStockKey, number> = {
+    ok: stock.filter((s) => s.statut_stock === 'ok').length,
+    alerte: stock.filter((s) => s.statut_stock === 'alerte').length,
+    critique: stock.filter((s) => s.statut_stock === 'critique').length,
+    rupture: stock.filter((s) => s.statut_stock === 'rupture').length,
+  }
+  const radius = 56
+  const circumference = 2 * Math.PI * radius
+  const pctOk = total > 0 ? Math.round((counts.ok / total) * 100) : 100
+
+  let cumulative = 0
+  const segments = (['ok', 'alerte', 'critique', 'rupture'] as const)
+    .map((key) => ({ key, value: counts[key] }))
+    .filter((s) => s.value > 0)
+    .map((s) => {
+      const pct = total > 0 ? s.value / total : 0
+      const dash = circumference * pct
+      const rotation = -90 + (cumulative / Math.max(total, 1)) * 360
+      cumulative += s.value
+      return { ...s, dash, rotation }
+    })
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <svg width="168" height="168" viewBox="0 0 168 168">
+        <circle cx="84" cy="84" r={radius} fill="none" stroke="#f3f4f6" strokeWidth="16" />
+        {segments.map((seg) => (
+          <circle
+            key={seg.key}
+            cx="84"
+            cy="84"
+            r={radius}
+            fill="none"
+            strokeWidth="16"
+            strokeDasharray={`${seg.dash} ${circumference - seg.dash}`}
+            transform={`rotate(${seg.rotation} 84 84)`}
+            className={`transition-all duration-700 ${RING_STROKE_CLASSES[seg.key]}`}
+          />
+        ))}
+        <text x="84" y="80" textAnchor="middle" className="fill-gray-900 text-[28px] font-bold">
+          {pctOk}%
+        </text>
+        <text x="84" y="100" textAnchor="middle" className="fill-gray-400 text-[10px] font-medium uppercase tracking-wide">
+          niveau normal
+        </text>
+      </svg>
+
+      <div className="flex flex-wrap justify-center gap-3">
+        {(['ok', 'alerte', 'critique', 'rupture'] as const).map((key) => (
+          <div key={key} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span className={`h-2 w-2 rounded-full ${RING_DOT_CLASSES[key]}`} />
+            {key === 'ok' ? 'OK' : key.charAt(0).toUpperCase() + key.slice(1)} ({counts[key]})
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function libelleJour(dateStr: string): string {
+  const date = new Date(dateStr)
+  const aujourdhui = new Date()
+  const hier = new Date()
+  hier.setDate(hier.getDate() - 1)
+
+  if (date.toDateString() === aujourdhui.toDateString()) return "Aujourd'hui"
+  if (date.toDateString() === hier.toDateString()) return 'Hier'
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+}
 
 export function DashboardPage() {
   const depots = useAppStore((s) => s.depots)
-  const [tab, setTab] = useState<Tab>('general')
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
+  const [activeCard, setActiveCard] = useState(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const [allStock, setAllStock] = useState<StockGlobal[]>([])
   const [bonsSortieAttente, setBonsSortieAttente] = useState<BonSortieGlobal[]>([])
   const [bonsReceptionAttente, setBonsReceptionAttente] = useState<BonReceptionGlobal[]>([])
   const [alertes, setAlertes] = useState<AlerteGlobale[]>([])
-  const [bonsSortieJour, setBonsSortieJour] = useState<BonSortieGlobal[]>([])
-  const [bonsReceptionJour, setBonsReceptionJour] = useState<BonReceptionGlobal[]>([])
   const [mouvements, setMouvements] = useState<Mouvement[]>([])
 
   const [expandedDepot, setExpandedDepot] = useState<string | null>(null)
-  const [filtreDepot, setFiltreDepot] = useState('')
-  const [filtreStatut, setFiltreStatut] = useState('')
-  const [filtreType, setFiltreType] = useState<'' | 'sortie' | 'reception'>('')
 
   useEffect(() => {
     let cancelled = false
 
     async function load() {
-      const debutJournee = new Date()
-      debutJournee.setHours(0, 0, 0, 0)
-
-      const [stockRes, sortieAttenteRes, receptionAttenteRes, alertesRes, sortieJourRes, receptionJourRes, sortieMouvRes, receptionMouvRes] =
+      const [stockRes, sortieAttenteRes, receptionAttenteRes, alertesRes, sortieMouvRes, receptionMouvRes] =
         await Promise.all([
           supabase.from('stock_produits').select(STOCK_GLOBAL_SELECT).order('depot_id'),
           supabase.from('bons_sortie').select(BON_SORTIE_GLOBAL_SELECT).eq('statut', 'en_attente').order('created_at', { ascending: false }),
           supabase.from('bons_reception').select(BON_RECEPTION_GLOBAL_SELECT).eq('statut', 'en_attente').order('created_at', { ascending: false }),
           supabase.from('alertes').select(ALERTES_SELECT).eq('acquittee', false).order('envoyee_le', { ascending: false }).limit(20),
-          supabase.from('bons_sortie').select(BON_SORTIE_GLOBAL_SELECT).gte('created_at', debutJournee.toISOString()).order('created_at', { ascending: false }),
-          supabase.from('bons_reception').select(BON_RECEPTION_GLOBAL_SELECT).gte('created_at', debutJournee.toISOString()).order('created_at', { ascending: false }),
           supabase.from('bons_sortie').select(MOUVEMENT_SORTIE_SELECT).eq('statut', 'approuve').order('valide_le', { ascending: false }).limit(30),
           supabase.from('bons_reception').select(MOUVEMENT_RECEPTION_SELECT).eq('statut', 'valide').order('valide_le', { ascending: false }).limit(30),
         ])
@@ -212,8 +287,6 @@ export function DashboardPage() {
       setBonsSortieAttente((sortieAttenteRes.data ?? []) as unknown as BonSortieGlobal[])
       setBonsReceptionAttente((receptionAttenteRes.data ?? []) as unknown as BonReceptionGlobal[])
       setAlertes((alertesRes.data ?? []) as unknown as AlerteGlobale[])
-      setBonsSortieJour((sortieJourRes.data ?? []) as unknown as BonSortieGlobal[])
-      setBonsReceptionJour((receptionJourRes.data ?? []) as unknown as BonReceptionGlobal[])
 
       const mvtSortie = ((sortieMouvRes.data ?? []) as unknown as MouvementSortieRow[]).flatMap((bon) =>
         bon.lignes.map((ligne) => ({
@@ -255,6 +328,16 @@ export function DashboardPage() {
     }
   }, [])
 
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el || el.clientWidth === 0) return
+    setActiveCard(Math.round(el.scrollLeft / el.clientWidth))
+  }
+
+  const goToCard = (index: number) => {
+    scrollRef.current?.scrollTo({ left: index * (scrollRef.current.clientWidth ?? 0), behavior: 'smooth' })
+  }
+
   if (loading) return <p className="text-sm text-gray-400">Chargement...</p>
 
   const totalArticles = allStock.reduce((total, s) => total + s.qte_disponible, 0)
@@ -268,236 +351,200 @@ export function DashboardPage() {
     ...bonsReceptionAttente.map((bon) => ({ type: 'reception' as const, bon })),
   ].sort((a, b) => new Date(b.bon.created_at).getTime() - new Date(a.bon.created_at).getTime())
 
-  const bonsJour: BonJourItem[] = [
-    ...bonsSortieJour.map((bon) => ({ type: 'sortie' as const, bon })),
-    ...bonsReceptionJour.map((bon) => ({ type: 'reception' as const, bon })),
-  ]
-    .filter((item) => !filtreDepot || item.bon.depot_id === filtreDepot)
-    .filter((item) => !filtreStatut || item.bon.statut === filtreStatut)
-    .filter((item) => !filtreType || item.type === filtreType)
-    .sort((a, b) => new Date(b.bon.created_at).getTime() - new Date(a.bon.created_at).getTime())
-
-  const cards = [
-    { label: 'Articles en stock (tous dépôts)', value: totalArticles, color: 'bg-brand-50 text-brand-800' },
-    { label: 'Bons en attente', value: totalBonsAttente, color: 'bg-amber-50 text-amber-600' },
-    { label: 'Alertes actives', value: alertesActives.length, color: 'bg-danger-50 text-danger-600' },
-    { label: 'Dépôts actifs', value: depots.length, color: 'bg-blue-50 text-blue-800' },
-  ]
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <h1 className="text-lg font-bold text-gray-900">Tableau de bord</h1>
 
-      <div className="flex gap-2 overflow-x-auto">
-        {TABS.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => setTab(t.value)}
-            className={`flex-1 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-medium ${
-              tab === t.value ? 'bg-brand-800 text-white' : 'bg-white text-gray-600'
-            }`}
-          >
-            {t.label}
-          </button>
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="-mx-4 flex snap-x snap-mandatory overflow-x-auto px-4 [&::-webkit-scrollbar]:hidden"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {CARTES.map((carte) => (
+          <div key={carte} className="w-full shrink-0 snap-center pr-0">
+            <div className="flex min-h-[60vh] flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm">
+              <h2 className="text-sm font-bold uppercase tracking-wide text-gray-400">{CARTE_TITRES[carte]}</h2>
+
+              {carte === 'apercu' && (
+                <div className="flex flex-col gap-5">
+                  <HealthRing stock={allStock} />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-brand-50 p-3 text-center">
+                      <div className="text-xl font-bold text-brand-800">{totalArticles}</div>
+                      <div className="text-[11px] font-medium text-brand-800/70">Articles</div>
+                    </div>
+                    <div className="rounded-xl bg-amber-50 p-3 text-center">
+                      <div className="text-xl font-bold text-amber-600">{totalBonsAttente}</div>
+                      <div className="text-[11px] font-medium text-amber-600/70">En attente</div>
+                    </div>
+                    <div className="rounded-xl bg-blue-50 p-3 text-center">
+                      <div className="text-xl font-bold text-blue-800">{depots.length}</div>
+                      <div className="text-[11px] font-medium text-blue-800/70">Dépôts</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {carte === 'valider' && (
+                <div className="flex flex-1 flex-col gap-2">
+                  {enAttenteValidation.map((item) => (
+                    <button
+                      key={`${item.type}-${item.bon.id}`}
+                      type="button"
+                      onClick={() => navigate('/validations')}
+                      className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3 text-left"
+                    >
+                      <div
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                          item.type === 'sortie' ? 'bg-danger-50 text-danger-600' : 'bg-brand-50 text-brand-800'
+                        }`}
+                      >
+                        {item.type === 'sortie' ? <PackageMinus size={18} /> : <PackagePlus size={18} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-gray-900">{item.bon.numero}</div>
+                        <div className="truncate text-xs text-gray-500">
+                          {item.bon.depot?.nom ?? '-'} ·{' '}
+                          {item.type === 'sortie' ? item.bon.motif : item.bon.fournisseur} ·{' '}
+                          {new Date(item.bon.created_at).toLocaleDateString('fr-FR')}
+                        </div>
+                      </div>
+                      <Badge color={statutToColor(item.bon.statut)}>{item.bon.statut}</Badge>
+                    </button>
+                  ))}
+
+                  {enAttenteValidation.length === 0 && (
+                    <p className="text-sm text-gray-400">Aucun bon en attente 🎉</p>
+                  )}
+
+                  {enAttenteValidation.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/validations')}
+                      className="mt-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand-800 py-2.5 text-sm font-semibold text-white"
+                    >
+                      Voir tout dans Validations <ArrowRight size={15} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {carte === 'alertes' && (
+                <div className="flex flex-1 flex-col gap-2">
+                  {alertesActives.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between rounded-2xl bg-gray-50 p-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-gray-900">{a.stock_produit?.produit?.nom}</div>
+                        <div className="text-xs text-gray-500">
+                          {a.stock_produit?.depot?.nom} · {a.stock_produit?.qte_disponible}{' '}
+                          {a.stock_produit?.produit?.unite} disponible{(a.stock_produit?.qte_disponible ?? 0) > 1 ? 's' : ''}
+                        </div>
+                      </div>
+                      <Badge color={ALERTE_COLORS[a.type]}>{a.type}</Badge>
+                    </div>
+                  ))}
+
+                  {alertesActives.length === 0 && <p className="text-sm text-gray-400">Aucune alerte active 🎉</p>}
+                </div>
+              )}
+
+              {carte === 'stocks' && (
+                <div className="flex flex-1 flex-col gap-3">
+                  {depots.map((depot) => {
+                    const stockDepot = allStock.filter((s) => s.depot_id === depot.id)
+                    const isOpen = expandedDepot === depot.id
+
+                    return (
+                      <div key={depot.id} className="rounded-2xl bg-gray-50">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedDepot(isOpen ? null : depot.id)}
+                          className="flex w-full items-center justify-between p-3"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Warehouse size={16} className="text-brand-800" />
+                            <span className="text-sm font-semibold text-gray-700">{depot.nom}</span>
+                            <span className="text-xs text-gray-400">
+                              ({stockDepot.length} article{stockDepot.length > 1 ? 's' : ''})
+                            </span>
+                          </div>
+                          <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isOpen && (
+                          <div className="flex flex-col gap-3 border-t border-gray-200 p-3">
+                            {stockDepot.map((s) => (
+                              <StockBar key={s.id} stock={s as unknown as StockProduit} />
+                            ))}
+                            {stockDepot.length === 0 && <p className="text-sm text-gray-400">Aucun produit en stock</p>}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {depots.length === 0 && <p className="text-sm text-gray-400">Aucun dépôt actif</p>}
+                </div>
+              )}
+
+              {carte === 'activite' && (
+                <div className="flex flex-1 flex-col gap-3">
+                  {mouvements.length === 0 && <p className="text-sm text-gray-400">Aucun mouvement récent</p>}
+
+                  {mouvements.map((m, i) => {
+                    const jourPrecedent = i > 0 ? libelleJour(mouvements[i - 1].date) : null
+                    const jour = libelleJour(m.date)
+
+                    return (
+                      <div key={m.id}>
+                        {jour !== jourPrecedent && (
+                          <div className="mb-2 mt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                            {jour}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 rounded-2xl bg-gray-50 p-3">
+                          <div
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                              m.type === 'sortie' ? 'bg-danger-50 text-danger-600' : 'bg-brand-50 text-brand-800'
+                            }`}
+                          >
+                            {m.type === 'sortie' ? <PackageMinus size={18} /> : <PackagePlus size={18} />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate font-medium text-gray-900">{m.produitNom}</div>
+                            <div className="text-xs text-gray-500">
+                              {m.depotNom} · {new Date(m.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-sm font-semibold text-gray-900">
+                            {m.type === 'sortie' ? '-' : '+'}
+                            {m.quantite} {m.unite}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         ))}
       </div>
 
-      {tab === 'general' && (
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-3">
-            {cards.map((card) => (
-              <div key={card.label} className={`rounded-2xl p-4 ${card.color}`}>
-                <div className="text-2xl font-bold">{card.value}</div>
-                <div className="text-xs font-medium">{card.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">En attente de validation</h2>
-            <div className="flex flex-col gap-2">
-              {enAttenteValidation.map((item) => (
-                <div key={`${item.type}-${item.bon.id}`} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
-                  <div
-                    className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                      item.type === 'sortie' ? 'bg-danger-50 text-danger-600' : 'bg-brand-50 text-brand-800'
-                    }`}
-                  >
-                    {item.type === 'sortie' ? <PackageMinus size={18} /> : <PackagePlus size={18} />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{item.bon.numero}</div>
-                    <div className="text-xs text-gray-500">
-                      {item.bon.depot?.nom ?? '-'} ·{' '}
-                      {item.type === 'sortie' ? item.bon.motif : item.bon.fournisseur} ·{' '}
-                      {new Date(item.bon.created_at).toLocaleDateString('fr-FR')}
-                    </div>
-                  </div>
-                  <Badge color={statutToColor(item.bon.statut)}>{item.bon.statut}</Badge>
-                </div>
-              ))}
-
-              {enAttenteValidation.length === 0 && <p className="text-sm text-gray-400">Aucun bon en attente</p>}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="mb-2 text-sm font-semibold text-gray-700">Alertes actives</h2>
-            <div className="flex flex-col gap-2">
-              {alertesActives.map((a) => (
-                <div key={a.id} className="flex items-center justify-between rounded-2xl bg-white p-4 shadow-sm">
-                  <div>
-                    <div className="font-medium text-gray-900">{a.stock_produit?.produit?.nom}</div>
-                    <div className="text-xs text-gray-500">
-                      {a.stock_produit?.depot?.nom} · {a.stock_produit?.qte_disponible}{' '}
-                      {a.stock_produit?.produit?.unite} disponible{(a.stock_produit?.qte_disponible ?? 0) > 1 ? 's' : ''}
-                    </div>
-                  </div>
-                  <Badge color={ALERTE_COLORS[a.type]}>{a.type}</Badge>
-                </div>
-              ))}
-
-              {alertesActives.length === 0 && <p className="text-sm text-gray-400">Aucune alerte active</p>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === 'stocks' && (
-        <div className="flex flex-col gap-3">
-          {depots.map((depot) => {
-            const stockDepot = allStock.filter((s) => s.depot_id === depot.id)
-            const isOpen = expandedDepot === depot.id
-
-            return (
-              <div key={depot.id} className="rounded-2xl bg-white shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setExpandedDepot(isOpen ? null : depot.id)}
-                  className="flex w-full items-center justify-between p-4"
-                >
-                  <div className="flex items-center gap-2">
-                    <Warehouse size={18} className="text-brand-800" />
-                    <span className="text-sm font-semibold text-gray-700">{depot.nom}</span>
-                    <span className="text-xs text-gray-400">
-                      ({stockDepot.length} article{stockDepot.length > 1 ? 's' : ''})
-                    </span>
-                  </div>
-                  <ChevronDown size={18} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {isOpen && (
-                  <div className="flex flex-col gap-3 border-t border-gray-100 p-4">
-                    {stockDepot.map((s) => (
-                      <StockBar key={s.id} stock={s as unknown as StockProduit} />
-                    ))}
-                    {stockDepot.length === 0 && <p className="text-sm text-gray-400">Aucun produit en stock</p>}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-
-          {depots.length === 0 && <p className="text-sm text-gray-400">Aucun dépôt actif</p>}
-        </div>
-      )}
-
-      {tab === 'bons-jour' && (
-        <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-3 gap-2">
-            <select
-              aria-label="Filtrer par dépôt"
-              value={filtreDepot}
-              onChange={(e) => setFiltreDepot(e.target.value)}
-              className="rounded-xl border border-gray-200 px-2 py-2 text-xs focus:border-brand-400 focus:outline-none"
-            >
-              <option value="">Dépôt</option>
-              {depots.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.nom}
-                </option>
-              ))}
-            </select>
-            <select
-              aria-label="Filtrer par type"
-              value={filtreType}
-              onChange={(e) => setFiltreType(e.target.value as '' | 'sortie' | 'reception')}
-              className="rounded-xl border border-gray-200 px-2 py-2 text-xs focus:border-brand-400 focus:outline-none"
-            >
-              <option value="">Type</option>
-              <option value="sortie">Sortie</option>
-              <option value="reception">Réception</option>
-            </select>
-            <select
-              aria-label="Filtrer par statut"
-              value={filtreStatut}
-              onChange={(e) => setFiltreStatut(e.target.value)}
-              className="rounded-xl border border-gray-200 px-2 py-2 text-xs focus:border-brand-400 focus:outline-none"
-            >
-              <option value="">Statut</option>
-              {STATUT_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {bonsJour.map((item) => (
-              <div key={`${item.type}-${item.bon.id}`} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                    item.type === 'sortie' ? 'bg-danger-50 text-danger-600' : 'bg-brand-50 text-brand-800'
-                  }`}
-                >
-                  {item.type === 'sortie' ? <PackageMinus size={18} /> : <PackagePlus size={18} />}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium text-gray-900">{item.bon.numero}</div>
-                  <div className="text-xs text-gray-500">
-                    {item.bon.depot?.nom ?? '-'} ·{' '}
-                    {item.type === 'sortie' ? item.bon.motif : item.bon.fournisseur} ·{' '}
-                    {new Date(item.bon.created_at).toLocaleTimeString('fr-FR')}
-                  </div>
-                </div>
-                <Badge color={statutToColor(item.bon.statut)}>{item.bon.statut}</Badge>
-              </div>
-            ))}
-
-            {bonsJour.length === 0 && <p className="text-sm text-gray-400">Aucun bon aujourd'hui</p>}
-          </div>
-        </div>
-      )}
-
-      {tab === 'mouvements' && (
-        <div className="flex flex-col gap-2">
-          {mouvements.map((m) => (
-            <div key={m.id} className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm">
-              <div
-                className={`flex h-9 w-9 items-center justify-center rounded-xl ${
-                  m.type === 'sortie' ? 'bg-danger-50 text-danger-600' : 'bg-brand-50 text-brand-800'
-                }`}
-              >
-                {m.type === 'sortie' ? <PackageMinus size={18} /> : <PackagePlus size={18} />}
-              </div>
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">{m.produitNom}</div>
-                <div className="text-xs text-gray-500">
-                  {m.depotNom} · {new Date(m.date).toLocaleString('fr-FR')}
-                </div>
-              </div>
-              <div className="text-sm font-semibold text-gray-900">
-                {m.type === 'sortie' ? '-' : '+'}
-                {m.quantite} {m.unite}
-              </div>
-            </div>
-          ))}
-
-          {mouvements.length === 0 && <p className="text-sm text-gray-400">Aucun mouvement récent</p>}
-        </div>
-      )}
+      <div className="flex justify-center gap-1.5">
+        {CARTES.map((carte, i) => (
+          <button
+            key={carte}
+            type="button"
+            aria-label={`Aller à ${CARTE_TITRES[carte]}`}
+            onClick={() => goToCard(i)}
+            className={`h-1.5 rounded-full transition-all ${
+              activeCard === i ? 'w-6 bg-brand-800' : 'w-1.5 bg-gray-300'
+            }`}
+          />
+        ))}
+      </div>
     </div>
   )
 }
