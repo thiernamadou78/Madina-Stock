@@ -8,8 +8,6 @@ import {
   PackageMinus,
   PackagePlus,
   Users,
-  Wifi,
-  WifiOff,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAppStore } from '../stores/appStore'
@@ -32,20 +30,8 @@ export function HomePage() {
   const { stock, alertes, loading, refresh: refreshStock } = useStock()
   const [bonsJour, setBonsJour] = useState(0)
   const [bonsEnAttente, setBonsEnAttente] = useState(0)
-  const [online, setOnline] = useState(navigator.onLine)
 
   useExpiration(refreshStock)
-
-  useEffect(() => {
-    const onOnline = () => setOnline(true)
-    const onOffline = () => setOnline(false)
-    window.addEventListener('online', onOnline)
-    window.addEventListener('offline', onOffline)
-    return () => {
-      window.removeEventListener('online', onOnline)
-      window.removeEventListener('offline', onOffline)
-    }
-  }, [])
 
   useEffect(() => {
     if (!depotActifId) return
@@ -89,20 +75,13 @@ export function HomePage() {
     <div className="flex flex-col gap-4">
       <AlertStrip alertes={alertes} />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {kpis.map((kpi) => (
           <div key={kpi.label} className={`rounded-2xl p-4 ${kpi.color}`}>
             <div className="text-2xl font-bold">{kpi.value}</div>
             <div className="text-xs font-medium">{kpi.label}</div>
           </div>
         ))}
-
-        <div className={`flex flex-col rounded-2xl p-4 ${online ? 'bg-brand-50 text-brand-800' : 'bg-danger-50 text-danger-600'}`}>
-          <div className="flex items-center gap-2">
-            {online ? <Wifi size={20} /> : <WifiOff size={20} />}
-          </div>
-          <div className="mt-1 text-xs font-medium">{online ? 'Connecté' : 'Hors ligne'}</div>
-        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
